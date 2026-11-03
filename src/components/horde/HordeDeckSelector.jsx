@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
-import { Skull, Plus, Link, Loader2, ChevronRight, Check, ExternalLink, Trash2, X } from 'lucide-react';
+import { db, functions } from '@/api/backend';
+import { Skull, Plus, Link, Loader2, Check, Trash2, X } from 'lucide-react';
 
 // The 5 known Archidekt horde decks from wadledo's folder
 const PREBUILT_DECKS = [
@@ -21,7 +21,7 @@ export default function HordeDeckSelector({ onSelect, selectedDeckId }) {
   const [importError, setImportError] = useState('');
 
   useEffect(() => {
-    base44.entities.HordeDeck.list('-view_count', 50).then(setStoredDecks).catch(() => {});
+    db.HordeDeck.list('-view_count', 50).then(setStoredDecks).catch(() => {});
   }, []);
 
   const isStored = (archidektId) => storedDecks.some(d => d.archidekt_id === archidektId);
@@ -29,9 +29,9 @@ export default function HordeDeckSelector({ onSelect, selectedDeckId }) {
 
   const importDeck = async (archidektId) => {
     setLoadingId(archidektId);
-    const { data } = await base44.functions.invoke('fetchArchidektDeck', { deck_id: archidektId });
+    const { data } = await functions.invoke('fetchArchidektDeck', { deck_id: archidektId });
     if (data?.deck) {
-      const saved = await base44.entities.HordeDeck.create(data.deck);
+      const saved = await db.HordeDeck.create(data.deck);
       setStoredDecks(prev => [saved, ...prev]);
       onSelect(saved);
     }
@@ -45,9 +45,9 @@ export default function HordeDeckSelector({ onSelect, selectedDeckId }) {
       return;
     }
     setImportLoading(true);
-    const { data } = await base44.functions.invoke('fetchArchidektDeck', { deck_url: importUrl });
+    const { data } = await functions.invoke('fetchArchidektDeck', { deck_url: importUrl });
     if (data?.deck) {
-      const saved = await base44.entities.HordeDeck.create(data.deck);
+      const saved = await db.HordeDeck.create(data.deck);
       setStoredDecks(prev => [saved, ...prev]);
       onSelect(saved);
       setShowImport(false);
@@ -60,7 +60,7 @@ export default function HordeDeckSelector({ onSelect, selectedDeckId }) {
 
   const deleteDeck = async (e, deckId) => {
     e.stopPropagation();
-    await base44.entities.HordeDeck.delete(deckId);
+    await db.HordeDeck.delete(deckId);
     setStoredDecks(prev => prev.filter(d => d.id !== deckId));
     if (selectedDeckId === deckId) onSelect(null);
   };

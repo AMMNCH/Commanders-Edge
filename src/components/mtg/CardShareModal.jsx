@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Send, X, Search, Loader2, History, Sparkles, BookOpen, Camera } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { ai } from '@/api/backend';
 import ArchidektDeckPicker from './ArchidektDeckPicker';
 
 const HISTORY_KEY = 'mtg_card_history';
@@ -111,12 +111,12 @@ export default function CardShareModal({ onSend, onClose, playerName, playerInde
 
     let searchQuery = query;
 
-    if (useAI) {
+    if (useAI && ai.available) {
       try {
         const wordBank = deckCardNames.length > 0
           ? `\n\nThe user's deck contains these cards (prefer matching from this list):\n${deckCardNames.join(', ')}`
           : '';
-        const result = await base44.integrations.Core.InvokeLLM({
+        const result = await ai.invokeLLM({
           prompt: `You are a Magic: The Gathering expert. The user described a card as: "${query}".${wordBank}
 Return ONLY the exact card name, nothing else. No explanation, no punctuation, just the card name.
 If the description matches a card in the deck list, prefer that. Otherwise return the most likely MTG card match.`,
@@ -131,27 +131,32 @@ If the description matches a card in the deck list, prefer that. Otherwise retur
       }
     }
 
-    const res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(searchQuery)}`);
-    let foundCard = null;
-    if (res.ok) {
-      foundCard = await res.json();
-      const imageUrl = foundCard.image_uris?.normal
-        || foundCard.card_faces?.[0]?.image_uris?.normal
-        || null;
-      const found = { name: foundCard.name, image_url: imageUrl };
-      setCard(found);
-      setStatus('found');
-    } else {
-      setStatus('error');
-    }
+    try {
+      const res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(searchQuery)}`);
+      let foundCard = null;
+      if (res.ok) {
+        foundCard = await res.json();
+        const imageUrl = foundCard.image_uris?.normal
+          || foundCard.card_faces?.[0]?.image_uris?.normal
+          || null;
+        const found = { name: foundCard.name, image_url: imageUrl };
+        setCard(found);
+        setStatus('found');
+      } else {
+        setStatus('error');
+      }
 
-    const acRes = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(searchQuery)}`);
-    if (acRes.ok) {
-      const acData = await acRes.json();
-      const alts = (acData.data || [])
-        .filter(n => !foundCard || n.toLowerCase() !== foundCard.name.toLowerCase())
-        .slice(0, 5);
-      setAlternatives(alts);
+      const acRes = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(searchQuery)}`);
+      if (acRes.ok) {
+        const acData = await acRes.json();
+        const alts = (acData.data || [])
+          .filter(n => !foundCard || n.toLowerCase() !== foundCard.name.toLowerCase())
+          .slice(0, 5);
+        setAlternatives(alts);
+      }
+    } catch (_) {
+      // Offline or Scryfall unreachable
+      setStatus('error');
     }
   };
 
@@ -250,12 +255,12 @@ If the description matches a card in the deck list, prefer that. Otherwise retur
     setCard(null);
     setAlternatives([]);
     // Upload image
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await ai.uploadFile({ file });
     // Ask LLM to identify the card
     const wordBank = deckCardNames.length > 0
       ? `\n\nThe user's deck contains: ${deckCardNames.join(', ')}. Prefer matching from this list.`
       : '';
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await ai.invokeLLM({
       prompt: `You are a Magic: The Gathering expert. Look at this card image and return the exact card name.${wordBank}
 Return ONLY the exact card name, nothing else.`,
       file_urls: [file_url],
@@ -280,7 +285,7 @@ Return ONLY the exact card name, nothing else.`,
       <motion.div
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-        className="w-full bg-slate-900 border-t border-white/10 rounded-t-3xl"
+        className="w-full bg-[#100e16] border-t border-white/10 rounded-t-3xl"
         style={{ maxHeight: '92vh', display: 'flex', flexDirection: 'column', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {/* Scrollable content */}
@@ -332,8 +337,8 @@ Return ONLY the exact card name, nothing else.`,
               </span>
             </button>
 
-            {/* Camera button */}
-            <button
+            {/* Camera button (AI card recognition — cloud only) */}
+            {ai.available && <button
               onClick={handleCameraClick}
               className="w-16 h-16 rounded-full flex flex-col items-center justify-center gap-1 mt-3 transition-all active:scale-95"
               style={{
@@ -345,7 +350,7 @@ Return ONLY the exact card name, nothing else.`,
               <span className="text-[10px] font-semibold tracking-wide" style={{ color: 'rgba(255,255,255,0.3)' }}>
                 SNAP
               </span>
-            </button>
+            </button>}
 
             <AnimatePresence>
               {captured && <SoundCapturedIndicator />}
@@ -353,7 +358,7 @@ Return ONLY the exact card name, nothing else.`,
 
             {!captured && (
               <p className="text-white/40 text-xs text-center mt-1">
-                {status === 'idle' && 'Hold mic to speak · Hold camera to snap'}
+                {status === 'idle' && (ai.available ? 'Hold mic to speak · Tap camera to snap' : 'Hold mic to speak a card name')}
                 {status === 'listening' && '🎙 Speak now...'}
                 {status === 'searching' && searchPhrase}
                 {status === 'found' && `Found: "${card?.name}"`}
@@ -379,14 +384,14 @@ Return ONLY the exact card name, nothing else.`,
             >
               {status === 'searching' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             </button>
-            <button
+            {ai.available && <button
               onClick={() => searchCard(transcript, true)}
               className="w-10 h-10 rounded-xl flex items-center justify-center active:opacity-70"
               style={{ background: `${accentColor}33`, border: `1px solid ${accentColor}55`, color: accentColor }}
               title="AI-assisted search"
             >
               <Sparkles className="w-4 h-4" />
-            </button>
+            </button>}
           </div>
 
           {/* Archidekt deck picker toggle */}

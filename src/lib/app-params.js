@@ -49,6 +49,23 @@ const getAppParams = () => {
 }
 
 
+const LOCAL_FLAG = 'ce_force_local';
+
+/** Cloud (Base44) when an app id is configured, unless ?local=1 forced offline. */
+function resolveCloud(appId) {
+	if (isNode) return false;
+	try {
+		const q = new URLSearchParams(window.location.search).get('local');
+		if (q === '1') storage.setItem(LOCAL_FLAG, '1');
+		if (q === '0') storage.removeItem(LOCAL_FLAG);
+		if (storage.getItem(LOCAL_FLAG) === '1') return false;
+	} catch (_) { /* ignore */ }
+	return Boolean(appId);
+}
+
+const params = getAppParams();
+
 export const appParams = {
-	...getAppParams()
+	...params,
+	cloud: resolveCloud(params.appId),
 }

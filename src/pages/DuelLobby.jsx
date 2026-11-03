@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Swords, Link, Users, ArrowRight, Copy, Check, Zap, Shuffle } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Swords, Link, ArrowRight, Copy, Check, Shuffle } from 'lucide-react';
+import { db } from '@/api/backend';
 import { createPageUrl } from '@/utils';
 
 function generateCode() {
@@ -58,7 +58,7 @@ export default function DuelLobby() {
     const code = generateCode();
     const channelId = generateCode() + generateCode();
     const player0 = { ...initDuelPlayer(0), name: myName || 'Player 1', deck_url: deckUrl, deck_name: deckName || extractDeckName(deckUrl) || 'My Deck' };
-    await base44.entities.DuelGame.create({
+    await db.DuelGame.create({
       code,
       status: 'waiting',
       starting_life: 20,
@@ -78,7 +78,7 @@ export default function DuelLobby() {
   const joinGame = async () => {
     setLoading(true);
     setError('');
-    const results = await base44.entities.DuelGame.filter({ code: joinCode.toUpperCase().trim() });
+    const results = await db.DuelGame.filter({ code: joinCode.toUpperCase().trim() });
     if (!results || results.length === 0) { setError('Game not found.'); setLoading(false); return; }
     const game = results[0];
     if (game.status === 'ended') { setError('That game has ended.'); setLoading(false); return; }
@@ -86,20 +86,20 @@ export default function DuelLobby() {
     const players = [...(game.players || [initDuelPlayer(0), initDuelPlayer(1)])];
     players[1] = { ...players[1], name: myName || 'Player 2', deck_url: deckUrl, deck_name: deckName || extractDeckName(deckUrl) || 'My Deck' };
     const chatLog = [...(game.chat_log || []), { player_index: -1, player_name: 'System', message: `${players[1].name} joined!`, timestamp: new Date().toISOString(), type: 'system' }];
-    await base44.entities.DuelGame.update(game.id, { players, status: 'active', chat_log: chatLog });
+    await db.DuelGame.update(game.id, { players, status: 'active', chat_log: chatLog });
     window.location.href = createPageUrl(`DuelGame?code=${game.code}&playerIndex=1`);
   };
 
   const enterMatchmaking = async () => {
     setSearching(true);
     // Look for an open matchmaking game
-    const open = await base44.entities.DuelGame.filter({ matchmaking: true, status: 'waiting' }, '-created_date', 5);
+    const open = await db.DuelGame.filter({ matchmaking: true, status: 'waiting' }, '-created_date', 5);
     if (open && open.length > 0) {
       const game = open[0];
       const players = [...(game.players || [initDuelPlayer(0), initDuelPlayer(1)])];
       players[1] = { ...players[1], name: myName || 'Player 2', deck_url: deckUrl, deck_name: deckName || extractDeckName(deckUrl) || 'My Deck' };
       const chatLog = [...(game.chat_log || []), { player_index: -1, player_name: 'System', message: `${players[1].name} joined via matchmaking!`, timestamp: new Date().toISOString(), type: 'system' }];
-      await base44.entities.DuelGame.update(game.id, { players, status: 'active', matchmaking: false, chat_log: chatLog });
+      await db.DuelGame.update(game.id, { players, status: 'active', matchmaking: false, chat_log: chatLog });
       window.location.href = createPageUrl(`DuelGame?code=${game.code}&playerIndex=1`);
       return;
     }
@@ -107,7 +107,7 @@ export default function DuelLobby() {
     const code = generateCode();
     const channelId = generateCode() + generateCode();
     const player0 = { ...initDuelPlayer(0), name: myName || 'Player 1', deck_url: deckUrl, deck_name: deckName || extractDeckName(deckUrl) || 'My Deck' };
-    await base44.entities.DuelGame.create({
+    await db.DuelGame.create({
       code, status: 'waiting', starting_life: 20, current_turn: 0, turn_number: 1,
       turn_started_at: new Date().toISOString(), phase: 'main1',
       players: [player0, initDuelPlayer(1)],
@@ -118,7 +118,7 @@ export default function DuelLobby() {
     setView('waitingMatch');
     setSearching(false);
     // Subscribe for opponent joining
-    const unsub = base44.entities.DuelGame.subscribe((event) => {
+    const unsub = db.DuelGame.subscribe((event) => {
       if (event.type === 'update' && event.data?.code === code && event.data?.status === 'active') {
         unsub();
         window.location.href = createPageUrl(`DuelGame?code=${code}&playerIndex=0`);

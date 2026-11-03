@@ -1,7 +1,19 @@
-// Sound effect utilities using Web Audio API
-const audioContext = typeof window !== 'undefined' ? new (window.AudioContext || window.webkitAudioContext)() : null;
+// Sound effect utilities using Web Audio API.
+// The AudioContext is created lazily (browsers warn when it is created before a
+// user gesture) and every sound respects the global mute setting.
+import { getSettings } from '@/lib/settings';
+
+let audioContext = null;
+function ctx() {
+  if (audioContext || typeof window === 'undefined') return audioContext;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  audioContext = AC ? new AC() : null;
+  return audioContext;
+}
 
 export const playSound = (type) => {
+  if (!getSettings().sound) return;
+  const audioContext = ctx();
   if (!audioContext) return;
   
   const oscillator = audioContext.createOscillator();
@@ -65,6 +77,7 @@ export const playSound = (type) => {
 };
 
 export const initAudio = () => {
+  const audioContext = ctx();
   if (audioContext && audioContext.state === 'suspended') {
     audioContext.resume();
   }

@@ -2,9 +2,10 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import { playSound } from './SoundEffects';
-import { base44 } from '@/api/base44Client';
+import { rollDie } from '@/lib/random';
 
 const DICE_TYPES = [
+  { sides: 2,  label: 'Coin', color: '#d4a64a', bg: 'bg-amber-600' },
   { sides: 4,  label: 'D4',  color: '#06b6d4', bg: 'bg-cyan-600' },
   { sides: 6,  label: 'D6',  color: '#3b82f6', bg: 'bg-blue-600' },
   { sides: 8,  label: 'D8',  color: '#8b5cf6', bg: 'bg-purple-600' },
@@ -16,12 +17,14 @@ const DICE_TYPES = [
 // Simple dice face SVGs
 const DieFace = ({ value, sides, color, size = 96 }) => {
   const isNat20 = sides === 20 && value === 20;
-  const isNat1 = value === 1;
+  const isNat1 = sides > 2 && value === 1;
   const faceColor = isNat20 ? '#fbbf24' : isNat1 ? '#dc2626' : color;
 
   return (
     <svg width={size} height={size} viewBox="0 0 96 96">
-      {sides === 6 ? (
+      {sides === 2 ? (
+        <circle cx="48" cy="48" r="44" fill={faceColor} stroke="#00000033" strokeWidth="4" />
+      ) : sides === 6 ? (
         <rect x="4" y="4" width="88" height="88" rx="16" fill={faceColor} />
       ) : sides === 4 ? (
         <polygon points="48,6 92,88 4,88" fill={faceColor} />
@@ -42,14 +45,14 @@ const DieFace = ({ value, sides, color, size = 96 }) => {
         fontWeight="900"
         fontFamily="system-ui, sans-serif"
       >
-        {value}
+        {sides === 2 ? (value === 1 ? 'H' : 'T') : value}
       </text>
     </svg>
   );
 };
 
 export default function DiceRoller() {
-  const [selected, setSelected] = useState(DICE_TYPES[5]);
+  const [selected, setSelected] = useState(DICE_TYPES[6]);
   const [result, setResult] = useState(null);
   const [rolling, setRolling] = useState(false);
   const [history, setHistory] = useState([]);
@@ -72,21 +75,9 @@ export default function DiceRoller() {
       if (shuffleCount >= 6) clearInterval(shuffleInterval);
     }, 60);
 
-    // Fetch real roll via LLM
-    let finalValue;
-    try {
-      const response = await base44.integrations.Core.InvokeLLM({
-        prompt: `Generate a single random integer between 1 and ${sides} inclusive. Seed: ${Date.now()}-${Math.random()}`,
-        response_json_schema: {
-          type: "object",
-          properties: { roll: { type: "integer" } },
-          required: ["roll"]
-        }
-      });
-      finalValue = Math.max(1, Math.min(sides, response.roll || Math.floor(Math.random() * sides) + 1));
-    } catch {
-      finalValue = Math.floor(Math.random() * sides) + 1;
-    }
+    // Let the shuffle animation play, then settle on a CSPRNG roll.
+    await new Promise((r) => setTimeout(r, 380));
+    const finalValue = rollDie(sides);
 
     clearInterval(shuffleInterval);
 
@@ -98,7 +89,7 @@ export default function DiceRoller() {
   };
 
   const isNat20 = selected.sides === 20 && result?.value === 20;
-  const isNat1 = result?.value === 1;
+  const isNat1 = selected.sides > 2 && result?.value === 1;
 
   return (
     <div className="rounded-2xl bg-slate-800/90 border border-slate-600/50 overflow-hidden">
@@ -109,7 +100,7 @@ export default function DiceRoller() {
         </div>
 
         {/* Dice type selector */}
-        <div className="grid grid-cols-6 gap-1.5 mb-4">
+        <div className="grid grid-cols-7 gap-1.5 mb-4">
           {DICE_TYPES.map((dice) => (
             <button
               key={dice.sides}
@@ -177,7 +168,7 @@ export default function DiceRoller() {
                 className="px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-medium"
                 style={{ opacity: 1 - i * 0.15 }}
               >
-                {roll.dice} <span className="font-black" style={{ color: roll.color }}>{roll.value}</span>
+                {roll.dice} <span className="font-black" style={{ color: roll.color }}>{roll.dice === 'Coin' ? (roll.value === 1 ? 'Heads' : 'Tails') : roll.value}</span>
               </span>
             ))}
           </div>

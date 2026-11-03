@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Shield, Swords, Zap, ChevronRight, AlertTriangle, Skull } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { X, Shield, Swords, Zap, ChevronRight, Skull } from 'lucide-react';
 
 // Parse keyword abilities from a creature object (stored in notes or ability flags)
 function getAbilities(creature) {
@@ -142,7 +142,7 @@ export default function HordeAttackModal({ creatures, sharedLife, onResolve, onC
       <motion.div
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 35 }}
-        className="w-full max-w-md rounded-t-3xl bg-slate-900 border-t border-white/10 overflow-hidden"
+        className="w-full max-w-md rounded-t-3xl bg-[#100e16] border-t border-white/10 overflow-hidden"
         style={{ maxHeight: '88vh' }}
         onClick={e => e.stopPropagation()}
       >

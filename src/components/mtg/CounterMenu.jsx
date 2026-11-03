@@ -54,7 +54,7 @@ export default function CounterMenu({ activeIds, onAdd }) {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900 border-t border-white/10 rounded-t-3xl p-5"
+              className="fixed bottom-0 left-0 right-0 z-50 bg-[#100e16] border-t border-white/10 rounded-t-3xl p-5"
               style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
             >
               <div className="flex items-center justify-between mb-4">

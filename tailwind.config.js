@@ -4,12 +4,22 @@ module.exports = {
     content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
   	extend: {
+  		fontFamily: {
+  			display: ['Cinzel', 'ui-serif', 'Georgia', 'serif'],
+  			sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			gold: {
+  				DEFAULT: '#d4a64a',
+  				light: '#f0cf7d',
+  				dark: '#8a6a24',
+  			},
+  			obsidian: '#07060b',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

@@ -49,24 +49,28 @@
  */
 import DuelGame from './pages/DuelGame';
 import DuelLobby from './pages/DuelLobby';
-import GameBoard from './pages/GameBoard';
 import HordeCommander from './pages/HordeCommander';
 import Lobby from './pages/Lobby';
 import PlayerView from './pages/PlayerView';
 import Scoreboard from './pages/Scoreboard';
+import Stats from './pages/Stats';
+import Table from './pages/Table';
 
 
 export const PAGES = {
     "DuelGame": DuelGame,
     "DuelLobby": DuelLobby,
-    "GameBoard": GameBoard,
+    // Old pass-and-play route; kept so bookmarks keep working.
+    "GameBoard": Table,
     "HordeCommander": HordeCommander,
     "Lobby": Lobby,
     "PlayerView": PlayerView,
     "Scoreboard": Scoreboard,
+    "Stats": Stats,
+    "Table": Table,
 }
 
 export const pagesConfig = {
-    mainPage: "PlayerView",
+    mainPage: "Lobby",
     Pages: PAGES,
 };

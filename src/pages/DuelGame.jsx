@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
+import { db, functions } from '@/api/backend';
 import { createPageUrl } from '@/utils';
 import {
   Minus, Plus, BookOpen, Skull, RotateCcw, Trash2, ChevronDown,
@@ -84,7 +84,7 @@ function BattlefieldCard({ card, onTap, onCounter, onDestroy }) {
             <div className="fixed inset-0 z-50" onClick={() => setMenu(false)} />
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-              className="absolute z-50 left-0 top-full mt-1 w-48 rounded-2xl bg-slate-900 border border-white/20 shadow-2xl p-2 space-y-1"
+              className="absolute z-50 left-0 top-full mt-1 w-48 rounded-2xl bg-[#100e16] border border-white/20 shadow-2xl p-2 space-y-1"
             >
               <p className="text-white/40 text-[9px] uppercase tracking-widest px-1 pb-1 truncate">{card.name}</p>
               <button onClick={() => { onTap && onTap(card.id); setMenu(false); }}
@@ -147,7 +147,7 @@ function HandCard({ card, onPlay, onDiscard }) {
             <div className="fixed inset-0 z-50" onClick={() => setPreview(false)} />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: -10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
-              className="absolute z-50 bottom-full mb-2 left-0 w-44 rounded-2xl bg-slate-900 border border-white/20 shadow-2xl p-2 space-y-1"
+              className="absolute z-50 bottom-full mb-2 left-0 w-44 rounded-2xl bg-[#100e16] border border-white/20 shadow-2xl p-2 space-y-1"
             >
               {card.image_url && (
                 <img src={card.image_url} alt={card.name} className="w-full rounded-xl mb-2" draggable={false} />
@@ -452,7 +452,7 @@ export default function DuelGame() {
   // ── Load game ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!code) { setLoading(false); return; }
-    base44.entities.DuelGame.filter({ code }).then(results => {
+    db.DuelGame.filter({ code }).then(results => {
       if (results?.length > 0) {
         const g = results[0];
         setGame(g);
@@ -472,8 +472,9 @@ export default function DuelGame() {
     deckLoadedRef.current = true;
     setDeckLoading(true);
 
-    base44.functions.invoke('fetchArchidektDeck', { url: deckUrl }).then(res => {
-      const raw = res?.data?.cards || [];
+    functions.invoke('fetchArchidektDeck', { deck_url: deckUrl }).then(res => {
+      // The function returns { deck: { cards } }; drop tokens from the library.
+      const raw = (res?.data?.deck?.cards || res?.data?.cards || []).filter(c => !c.is_token);
       // Expand by quantity and shuffle
       const expanded = [];
       raw.forEach(card => {
@@ -497,7 +498,7 @@ export default function DuelGame() {
           i === myIdx ? { ...p, hand, hand_count: hand.length, library_count: (p.library_count ?? 99) - hand.length } : p
         );
         const newGame = { ...prevGame, players };
-        base44.entities.DuelGame.update(gameIdRef.current, newGame);
+        db.DuelGame.update(gameIdRef.current, newGame);
         return newGame;
       });
     }).catch(() => setDeckLoading(false));
@@ -505,7 +506,7 @@ export default function DuelGame() {
 
   // ── Real-time subscription ───────────────────────────────────────────────────
   useEffect(() => {
-    return base44.entities.DuelGame.subscribe(event => {
+    return db.DuelGame.subscribe(event => {
       if (event.type !== 'update' && event.type !== 'create') return;
       if (gameIdRef.current && event.id !== gameIdRef.current) return;
       if (!gameIdRef.current) gameIdRef.current = event.id;
@@ -525,7 +526,7 @@ export default function DuelGame() {
   const save = (newGame) => {
     if (!gameIdRef.current) return;
     setGame(newGame);
-    base44.entities.DuelGame.update(gameIdRef.current, newGame);
+    db.DuelGame.update(gameIdRef.current, newGame);
   };
 
   const addLog = (g, entry) => ({ ...g, chat_log: [...(g.chat_log || []), entry] });
@@ -693,13 +694,13 @@ export default function DuelGame() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="fixed inset-0 bg-slate-950 flex items-center justify-center">
+    <div className="fixed inset-0 bg-obsidian flex items-center justify-center">
       <div className="text-white/30 text-sm">Loading duel…</div>
     </div>
   );
 
   if (!game) return (
-    <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center gap-4">
+    <div className="fixed inset-0 bg-obsidian flex flex-col items-center justify-center gap-4">
       <div className="text-white/60 font-bold">Game not found</div>
       <button onClick={() => window.location.href = createPageUrl('DuelLobby')}
         className="px-4 py-2 rounded-xl bg-amber-500/30 border border-amber-500/50 text-amber-300 font-bold text-sm">
@@ -716,7 +717,7 @@ export default function DuelGame() {
     : null;
 
   return (
-    <div className="fixed inset-0 bg-slate-950 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-obsidian flex flex-col overflow-hidden">
 
       {/* Top bar */}
       <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 bg-black/70 border-b border-white/10 z-20">
@@ -806,7 +807,7 @@ export default function DuelGame() {
           <>
             <motion.div className="fixed inset-0 z-40 bg-black/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowChat(false)} />
             <motion.div
-              className="fixed bottom-0 left-0 right-0 z-50 h-[65vh] bg-slate-900 border-t border-white/15 rounded-t-3xl flex flex-col overflow-hidden"
+              className="fixed bottom-0 left-0 right-0 z-50 h-[65vh] bg-[#100e16] border-t border-white/15 rounded-t-3xl flex flex-col overflow-hidden"
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 320 }}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
                 <span className="text-white font-bold text-sm">Game Log & Chat</span>

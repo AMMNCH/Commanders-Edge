@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Volume2, VolumeX, PhoneOff, Radio } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { db } from '@/api/backend';
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -34,7 +34,7 @@ export default function VoiceChat({ channelId, playerIndex, playerName }) {
   };
 
   const sendSignal = async (type, payload) => {
-    await base44.entities.WebRTCSignal.create({
+    await db.WebRTCSignal.create({
       channel_id: channelId,
       from_player: playerIndex,
       to_player: 1 - playerIndex,
@@ -45,13 +45,13 @@ export default function VoiceChat({ channelId, playerIndex, playerName }) {
   };
 
   const pollSignals = async () => {
-    const signals = await base44.entities.WebRTCSignal.filter({
+    const signals = await db.WebRTCSignal.filter({
       channel_id: channelId,
       to_player: playerIndex,
       consumed: false,
     });
     for (const sig of (signals || [])) {
-      await base44.entities.WebRTCSignal.update(sig.id, { consumed: true });
+      await db.WebRTCSignal.update(sig.id, { consumed: true });
       const data = JSON.parse(sig.payload);
       const pc = pcRef.current;
       if (!pc) continue;
@@ -131,7 +131,7 @@ export default function VoiceChat({ channelId, playerIndex, playerName }) {
 
   return (
     <div className="relative">
-      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+      <audio ref={remoteAudioRef} autoPlay className="hidden" />
 
       {/* Compact pill */}
       <button
@@ -152,7 +152,7 @@ export default function VoiceChat({ channelId, playerIndex, playerName }) {
             initial={{ opacity: 0, scale: 0.9, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 4 }}
-            className="absolute top-full right-0 mt-2 z-50 bg-slate-900 border border-white/15 rounded-2xl p-4 w-56 shadow-2xl"
+            className="absolute top-full right-0 mt-2 z-50 bg-[#100e16] border border-white/15 rounded-2xl p-4 w-56 shadow-2xl"
           >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-white font-bold text-sm">Voice Chat</h3>

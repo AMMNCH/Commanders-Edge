@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Swords, X, Plus, Minus, RotateCcw } from 'lucide-react';
+import { ChevronDown, Swords, Plus, Minus, RotateCcw } from 'lucide-react';
 
 const COUNTER_TYPES = [
   { id: '+1+1', label: '+1/+1', color: '#22c55e' },

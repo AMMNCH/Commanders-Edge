@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
-import { Heart, Clock, Skull, Crown, Zap, Target, Trophy, ChevronLeft, Swords, Timer, ArrowLeft } from 'lucide-react';
+import { db } from '@/api/backend';
+import { Skull, Crown, Zap, Target, Trophy, Swords, Timer, ArrowLeft } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import TurnTimer from '@/components/mtg/TurnTimer';
 
@@ -43,7 +43,7 @@ function ArchenemyVote({ players }) {
         <span className="text-white/30 text-xs ml-auto">Tap to vote</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        {players.filter(p => p.life > 0).map((p, i) => {
+        {players.map((p, i) => ({ p, i })).filter(({ p }) => p.life > 0).map(({ p, i }) => {
           const pct = total > 0 ? ((votes[i] || 0) / total) * 100 : 0;
           const isTop = String(i) === topIdx && (votes[i] || 0) > 0;
           const isMyVote = myVote === i;
@@ -153,7 +153,7 @@ function BountyBoard({ players }) {
         <span className="text-white/30 text-xs ml-auto">First to eliminate wins</span>
       </div>
       <div className="flex flex-wrap gap-2">
-        {players.filter(p => p.life > 0).map((p, i) => (
+        {players.map((p, i) => ({ p, i })).filter(({ p }) => p.life > 0).map(({ p, i }) => (
           <button
             key={i}
             onClick={() => setBounty(i)}
@@ -227,14 +227,14 @@ export default function Scoreboard() {
   useEffect(() => {
     const load = async () => {
       if (!code) return;
-      const results = await base44.entities.GameSession.filter({ code });
+      const results = await db.GameSession.filter({ code });
       if (results?.length > 0) setSession(results[0]);
     };
     load();
   }, [code]);
 
   useEffect(() => {
-    const unsub = base44.entities.GameSession.subscribe((event) => {
+    const unsub = db.GameSession.subscribe((event) => {
       if ((event.type === 'update' || event.type === 'create') && event.data?.code === code) {
         setSession(event.data);
       }
@@ -244,14 +244,14 @@ export default function Scoreboard() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-obsidian flex items-center justify-center">
         <div className="text-white/40 text-lg animate-pulse">Loading scoreboard...</div>
       </div>
     );
   }
 
   const players = session.players || [];
-  const sorted = [...players].sort((a, b) => b.life - a.life);
+  const sorted = players.map((p, idx) => ({ ...p, _idx: idx })).sort((a, b) => b.life - a.life);
   const alive = players.filter(p => p.life > 0);
   const dead = players.filter(p => p.life <= 0);
   const leader = sorted.find(p => p.life > 0);
@@ -326,18 +326,18 @@ export default function Scoreboard() {
 
               {/* Player cards with life bars */}
               {sorted.map((player, rank) => {
-                const originalIdx = players.findIndex(p => p.name === player.name && p.color === player.color);
+                const originalIdx = player._idx;
                 const isActive = originalIdx === session.current_turn_player;
                 const colorKey = player.color || COLORS_LIST[originalIdx % COLORS_LIST.length];
                 const accent = PLAYER_COLORS[colorKey] || '#a855f7';
                 const isDead = player.life <= 0;
                 const isDanger = !isDead && player.life <= 10;
-                const isLeader = !isDead && player === leader;
+                const isLeader = !isDead && player._idx === leader?._idx;
                 const lifePct = Math.max(0, Math.min(100, (player.life / (session.starting_life || 40)) * 100));
 
                 return (
                   <motion.div
-                    key={rank}
+                    key={originalIdx}
                     layout
                     animate={{ scale: isActive ? 1.01 : 1 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Sword, Plus, X, RotateCcw } from 'lucide-react';
+import { Sword, Plus, X, RotateCcw } from 'lucide-react';
 
 export default function HordeBoardState({ creatures = [], onUpdate }) {
   const [showAdd, setShowAdd] = useState(false);

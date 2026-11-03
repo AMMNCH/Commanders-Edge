@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
+import { isCloud } from '@/api/backend';
 
 const AuthContext = createContext();
 
@@ -18,6 +19,12 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkAppState = async () => {
+    // Local/offline mode has no accounts — go straight to the app.
+    if (!isCloud) {
+      setIsLoadingPublicSettings(false);
+      setIsLoadingAuth(false);
+      return;
+    }
     try {
       setIsLoadingPublicSettings(true);
       setAuthError(null);

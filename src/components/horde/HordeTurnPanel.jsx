@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Loader2, Sparkles, Swords } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { db } from '@/api/backend';
 import HordeAttackModal from '@/components/horde/HordeAttackModal';
 
 // Scryfall random card fallback (no deck selected)
@@ -82,7 +82,7 @@ export default function HordeTurnPanel({ session, onWaveComplete, isHordeTurn, o
   React.useEffect(() => {
     const deckId = session?.horde_deck_id;
     if (deckId && !deckCards) {
-      base44.entities.HordeDeck.list().then(all => {
+      db.HordeDeck.list().then(all => {
         const found = all.find(d => d.id === deckId);
         if (found) setDeckCards(found.cards || []);
       }).catch(() => {});

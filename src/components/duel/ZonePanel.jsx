@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, BookOpen, Skull, Plus, Minus, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronDown, BookOpen, Skull, RotateCcw, Trash2 } from 'lucide-react';
 
 // ── Counter types (mirrors Horde) ─────────────────────────────────────────────
 const COUNTER_TYPES = [
@@ -71,7 +71,7 @@ function BattlefieldCard({ card, isOwner, onTap, onCounter, onSendToGraveyard })
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="absolute z-50 left-0 top-full mt-1 w-44 rounded-2xl bg-slate-900 border border-white/20 shadow-2xl overflow-hidden p-2 space-y-1"
+              className="absolute z-50 left-0 top-full mt-1 w-44 rounded-2xl bg-[#100e16] border border-white/20 shadow-2xl overflow-hidden p-2 space-y-1"
             >
               <p className="text-white/50 text-[9px] uppercase tracking-widest px-1 pb-1">{card.name}</p>
 

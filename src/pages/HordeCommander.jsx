@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
+import { db } from '@/api/backend';
 import { createPageUrl } from '@/utils';
 import { ArrowLeft, ChevronRight, RotateCcw, Skull, Users, Swords, LayoutGrid } from 'lucide-react';
 import SharedLifeCounter from '@/components/horde/SharedLifeCounter';
@@ -35,7 +35,7 @@ export default function HordeCommander() {
   useEffect(() => {
     const load = async () => {
       if (!code) return;
-      const results = await base44.entities.GameSession.filter({ code });
+      const results = await db.GameSession.filter({ code });
       if (results?.length > 0) {
         sessionIdRef.current = results[0].id;
         sessionRef.current = results[0];
@@ -46,7 +46,7 @@ export default function HordeCommander() {
   }, [code]);
 
   useEffect(() => {
-    const unsub = base44.entities.GameSession.subscribe((event) => {
+    const unsub = db.GameSession.subscribe((event) => {
       if ((event.type === 'update' || event.type === 'create') && event.data?.code === code) {
         sessionIdRef.current = event.id || sessionIdRef.current;
         sessionRef.current = event.data;
@@ -61,7 +61,7 @@ export default function HordeCommander() {
     const updated = updater(JSON.parse(JSON.stringify(sessionRef.current)));
     sessionRef.current = updated;
     setSession(updated);
-    await base44.entities.GameSession.update(sessionIdRef.current, updated);
+    await db.GameSession.update(sessionIdRef.current, updated);
   };
 
   const updateSharedLife = (newLife) => {
@@ -145,7 +145,8 @@ export default function HordeCommander() {
     const sharedLife = calcStartingSharedLife(count);
     patch(s => {
       s.shared_life_total = sharedLife;
-      s.horde_library_size = 100;
+      // Restore the library to the chosen deck's size, not a hard-coded 100.
+      s.horde_library_size = s.horde_starting_library ?? 100;
       s.horde_graveyard_size = 0;
       s.horde_board_state = [];
       s.horde_wave_log = [];
@@ -161,7 +162,7 @@ export default function HordeCommander() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-obsidian flex items-center justify-center">
         <div className="text-white/40 text-lg animate-pulse">Loading Horde game...</div>
       </div>
     );

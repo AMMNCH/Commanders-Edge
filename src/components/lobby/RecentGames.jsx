@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
-import { createPageUrl } from '@/utils';
+import { db } from '@/api/backend';
 import { Clock, Users, ArrowRight, Skull, Swords, Trash2 } from 'lucide-react';
 
 const STORAGE_KEY = 'mtg_recent_games';
@@ -40,7 +39,7 @@ export default function RecentGames({ onJoin }) {
 
     Promise.all(
       stored.map(g =>
-        base44.entities.GameSession.filter({ code: g.code })
+        db.GameSession.filter({ code: g.code })
           .then(res => res?.[0] ? { ...g, session: res[0] } : null)
           .catch(() => null)
       )

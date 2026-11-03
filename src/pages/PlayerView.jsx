@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
-import { Minus, Plus, Bell, Leaf, ChevronDown, ArrowRight, MoreHorizontal, Users, Repeat, SkipForward, LogOut, Trophy, SlidersHorizontal, BarChart2, Search, Skull } from 'lucide-react';
+import { db, patchDoc } from '@/api/backend';
+import { Minus, Plus, Bell, Leaf, ChevronDown, ArrowRight, MoreHorizontal, Users, Repeat, SkipForward, LogOut, Trophy, SlidersHorizontal, BarChart2, Search, Skull, Swords, Droplet, Pencil } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import TurnTimer from '@/components/mtg/TurnTimer';
 import DiceRoller from '@/components/mtg/DiceRoller';
@@ -10,7 +10,9 @@ import { playSound, initAudio } from '@/components/mtg/SoundEffects';
 import CardShareModal from '@/components/mtg/CardShareModal';
 import CardOverlay from '@/components/mtg/CardOverlay';
 import CounterWidget from '@/components/mtg/CounterWidget';
-import CounterMenu, { ALL_COUNTERS } from '@/components/mtg/CounterMenu';
+import CounterMenu from '@/components/mtg/CounterMenu';
+import { accentOf } from '@/lib/theme';
+import { getSettings } from '@/lib/settings';
 import HordeHUD from '@/components/horde/HordeHUD';
 import HordeBoardPanel from '@/components/horde/HordeBoardPanel';
 import { saveRecentGame } from '@/components/lobby/RecentGames';
@@ -22,6 +24,8 @@ const PLAYER_COLORS = {
   green:  { bg: 'from-green-950 to-emerald-900',border: 'border-green-500/60',  accent: '#22c55e' },
   gold:   { bg: 'from-yellow-950 to-amber-900', border: 'border-yellow-500/60', accent: '#eab308' },
   white:  { bg: 'from-slate-800 to-slate-700',  border: 'border-slate-400/60',  accent: '#94a3b8' },
+  teal:   { bg: 'from-teal-950 to-teal-900',    border: 'border-teal-500/60',   accent: '#2dd4bf' },
+  pink:   { bg: 'from-pink-950 to-rose-900',    border: 'border-pink-500/60',   accent: '#f472b6' },
 };
 const COLORS_LIST = ['purple','blue','red','green','gold','white'];
 
@@ -29,7 +33,10 @@ export default function PlayerView() {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('sessionId');
   const playerIndex = parseInt(params.get('playerIndex') || '0');
-  const playerName = decodeURIComponent(params.get('playerName') || `Player ${playerIndex + 1}`);
+  const playerName = (() => {
+    const raw = params.get('playerName') || `Player ${playerIndex + 1}`;
+    try { return decodeURIComponent(raw); } catch (_) { return raw; }
+  })();
   const joinCode = params.get('code');
 
   const [session, setSession] = useState(null);
@@ -59,35 +66,44 @@ export default function PlayerView() {
   const pendingDelta = useRef(0);
   const audioCtxRef = useRef(null);
 
+  const [notFound, setNotFound] = useState(false);
   const resolveSession = useCallback(async () => {
+    try {
+      await resolveSessionInner();
+    } catch (e) {
+      console.error(e);
+    }
+    if (!sessionIdRef.current) setNotFound(true);
+  }, [sessionId, joinCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resolveSessionInner = useCallback(async () => {
     if (sessionId === 'NEW' && joinCode) {
-      const results = await base44.entities.GameSession.filter({ code: joinCode });
+      const results = await db.GameSession.filter({ code: joinCode });
       if (results?.length > 0) {
         sessionIdRef.current = results[0].id;
         setSession(results[0]);
       }
     } else if (joinCode) {
-      const results = await base44.entities.GameSession.filter({ code: joinCode });
+      const results = await db.GameSession.filter({ code: joinCode });
       if (results?.length > 0) {
         sessionIdRef.current = results[0].id;
         setSession(results[0]);
       }
     } else if (sessionId) {
-      const s = await base44.entities.GameSession.list();
-      const found = s.find(x => x.id === sessionId);
+      const found = await db.GameSession.get(sessionId).catch(() => null);
       if (found) {
         sessionIdRef.current = found.id;
         setSession(found);
       }
     } else {
       // No params: load the most recent active session for preview/testing
-      const s = await base44.entities.GameSession.filter({ status: 'active' }, '-created_date', 1);
+      const s = await db.GameSession.filter({ status: 'active' }, '-created_date', 1);
       if (s?.length > 0) {
         sessionIdRef.current = s[0].id;
         setSession(s[0]);
       } else {
         // Fall back to any session
-        const all = await base44.entities.GameSession.list('-created_date', 1);
+        const all = await db.GameSession.list('-created_date', 1);
         if (all?.length > 0) {
           sessionIdRef.current = all[0].id;
           setSession(all[0]);
@@ -110,18 +126,11 @@ export default function PlayerView() {
   }, []);
 
   useEffect(() => {
-    const unsub = base44.entities.GameSession.subscribe((event) => {
+    const unsub = db.GameSession.subscribe((event) => {
       if ((event.type === 'update' || event.type === 'create') &&
           (!sessionIdRef.current || event.id === sessionIdRef.current)) {
         const newSession = event.data;
-        setSession(prev => {
-          if (prev && prev.current_turn_player !== playerIndex && newSession.current_turn_player === playerIndex) {
-            setFlashing(true);
-            playSound('increment');
-            setTimeout(() => setFlashing(false), 2000);
-          }
-          return newSession;
-        });
+        setSession(newSession);
         if (!sessionIdRef.current) sessionIdRef.current = event.id;
         // Sync localLife from DB when not holding
         if (pendingDelta.current === 0) setLocalLife(null);
@@ -139,6 +148,23 @@ export default function PlayerView() {
     return () => unsub();
   }, [playerIndex]);
 
+  // Flash + chime when the turn passes to me.
+  const prevTurnRef = useRef(null);
+  useEffect(() => {
+    const cur = session?.current_turn_player;
+    if (cur === undefined) return;
+    if (prevTurnRef.current !== null && prevTurnRef.current !== cur && cur === playerIndex) {
+      setFlashing(true);
+      playSound('increment');
+      try { navigator.vibrate?.([30, 60, 30]); } catch (_) { /* ignore */ }
+      const id = setTimeout(() => setFlashing(false), 2000);
+      prevTurnRef.current = cur;
+      return () => clearTimeout(id);
+    }
+    prevTurnRef.current = cur;
+    return undefined;
+  }, [session?.current_turn_player, playerIndex]);
+
   const myPlayer = session?.players?.[playerIndex] || null;
   const isMyTurn = session?.current_turn_player === playerIndex;
   const colorKey = myPlayer?.color || COLORS_LIST[playerIndex % COLORS_LIST.length];
@@ -148,11 +174,51 @@ export default function PlayerView() {
   const isDanger = displayLife <= 10;
   const isDead = displayLife <= 0;
 
+  // Optimistic local update, then apply the same change to the freshest server
+  // copy so we never overwrite what other players changed in the meantime.
+  const sessionRef = useRef(null);
+  sessionRef.current = session;
   const patchSession = async (updater) => {
-    if (!sessionIdRef.current || !session) return;
-    const updated = updater(JSON.parse(JSON.stringify(session)));
-    setSession(updated);
-    await base44.entities.GameSession.update(sessionIdRef.current, updated);
+    if (!sessionIdRef.current || !sessionRef.current) return;
+    setSession(updater(JSON.parse(JSON.stringify(sessionRef.current))));
+    try {
+      const saved = await patchDoc('GameSession', sessionIdRef.current, updater, sessionRef.current);
+      if (saved) setSession(saved);
+    } catch (e) {
+      console.error('Sync failed', e);
+    }
+  };
+
+  const changeCommanderDamage = (fromIdx, delta) => {
+    playSound('commander');
+    const affectsLife = getSettings().cmdDamageAffectsLife;
+    patchSession(s => {
+      const me = s.players[playerIndex];
+      const dmg = { ...(me.commander_damage || {}) };
+      const cur = dmg[fromIdx] || 0;
+      const next = Math.max(0, cur + delta);
+      dmg[fromIdx] = next;
+      me.commander_damage = dmg;
+      if (affectsLife) me.life = (me.life ?? s.starting_life ?? 40) - (next - cur);
+      return s;
+    });
+  };
+
+  const changePoison = (delta) => {
+    playSound('poison');
+    patchSession(s => {
+      const me = s.players[playerIndex];
+      me.poison = Math.max(0, (me.poison || 0) + delta);
+      return s;
+    });
+  };
+
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const saveName = () => {
+    const n = nameDraft.trim().slice(0, 24);
+    if (n) patchSession(s => { s.players[playerIndex].name = n; return s; });
+    setRenaming(false);
   };
 
   // --- Life change: local-first, commit on release ---
@@ -296,8 +362,10 @@ export default function PlayerView() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white/50 text-lg">Connecting to game...</div>
+      <div className="min-h-[100dvh] bg-arcane flex flex-col items-center justify-center gap-4 p-6 text-center">
+        {!notFound && <div className="w-8 h-8 border-4 border-white/10 border-t-gold rounded-full animate-spin" />}
+        <div className="text-white/50">{notFound ? `Couldn't find game ${joinCode || ''}. It may have been created on another device while offline.` : `Connecting to game${joinCode ? ` ${joinCode}` : ''}…`}</div>
+        <a href={createPageUrl('Lobby')} className="text-xs text-white/35 underline underline-offset-4">Back to home</a>
       </div>
     );
   }
@@ -329,7 +397,10 @@ export default function PlayerView() {
         {/* Header */}
         <div className="flex items-center justify-between py-2 mb-2">
           <div>
-            <h2 className="text-white font-black text-lg leading-none">{myPlayer?.name || playerName}</h2>
+            <button onClick={() => { setNameDraft(myPlayer?.name || playerName); setRenaming(true); }} className="flex items-center gap-1.5 text-left">
+              <h2 className="text-white font-black text-lg leading-none">{myPlayer?.name || playerName}</h2>
+              <Pencil className="w-3 h-3 text-white/30" />
+            </button>
             <p className="text-white/40 text-xs mt-0.5">Code: {session.code} · Turn {session.turn_number}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -540,6 +611,34 @@ export default function PlayerView() {
           </motion.div>
         )}
 
+        {/* Commander damage + poison (synced) */}
+        <div className="rounded-xl bg-black/20 border border-white/10 p-3 mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-white/35 text-xs flex items-center gap-1.5"><Swords className="w-3.5 h-3.5 text-amber-300/70" /> Commander damage taken</p>
+            <div className="flex items-center gap-1.5">
+              <Droplet className={`w-3.5 h-3.5 ${(myPlayer?.poison || 0) >= 10 ? 'text-red-400' : 'text-lime-300'}`} />
+              <button onClick={() => changePoison(-1)} aria-label="Remove poison" className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center"><Minus className="w-3.5 h-3.5 text-white" /></button>
+              <span className={`w-6 text-center font-black tabular-nums ${(myPlayer?.poison || 0) >= 10 ? 'text-red-300' : 'text-lime-200'}`}>{myPlayer?.poison || 0}</span>
+              <button onClick={() => changePoison(1)} aria-label="Add poison" className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center"><Plus className="w-3.5 h-3.5 text-white" /></button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {session.players?.map((p, i) => {
+              if (i === playerIndex) return null;
+              const d = myPlayer?.commander_damage?.[i] || 0;
+              return (
+                <div key={i} className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 border ${d >= 21 ? 'bg-red-900/40 border-red-500/50' : 'bg-white/5 border-white/10'}`}>
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accentOf(p.color, i) }} />
+                  <span className="text-white/70 text-xs flex-1 truncate">{p.name || `P${i + 1}`}</span>
+                  <button onClick={() => changeCommanderDamage(i, -1)} aria-label={`Less damage from ${p.name}`} className="w-6 h-6 rounded bg-black/30 flex items-center justify-center"><Minus className="w-3 h-3 text-white" /></button>
+                  <span className={`w-5 text-center text-sm font-black tabular-nums ${d >= 21 ? 'text-red-300' : d >= 15 ? 'text-amber-200' : 'text-white'}`}>{d}</span>
+                  <button onClick={() => changeCommanderDamage(i, 1)} aria-label={`More damage from ${p.name}`} className="w-6 h-6 rounded bg-black/30 flex items-center justify-center"><Plus className="w-3 h-3 text-white" /></button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* All players */}
         <div className="rounded-xl bg-black/20 border border-white/10 p-3 mb-3">
           <p className="text-white/35 text-xs mb-2">All Players</p>
@@ -566,7 +665,7 @@ export default function PlayerView() {
             <ArrowRight className="w-5 h-5" />
             {isMyTurn
               ? (myPlayer?.extra_turns > 0 ? `Extra Turn (${myPlayer.extra_turns})` : 'End Turn')
-              : `P${session.current_turn_player + 1}'s Turn`}
+              : `${session.players?.[session.current_turn_player]?.name || `P${session.current_turn_player + 1}`}'s turn`}
           </button>
           <button onClick={() => setShowAdvanced(true)}
             className="w-12 rounded-2xl bg-white/8 border border-white/10 flex items-center justify-center text-white/30 active:bg-white/15">
@@ -641,7 +740,7 @@ export default function PlayerView() {
             <motion.div
               initial={{ y:'100%' }} animate={{ y:0 }} exit={{ y:'100%' }}
               transition={{ type:'spring', stiffness:400, damping:35 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900 border-t border-white/10 rounded-t-3xl p-6 space-y-3"
+              className="fixed bottom-0 left-0 right-0 z-50 bg-[#100e16] border-t border-white/10 rounded-t-3xl p-6 space-y-3"
               style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-white font-bold text-lg">Game Actions</h3>
@@ -713,7 +812,7 @@ export default function PlayerView() {
             <motion.div
               initial={{ y:'100%' }} animate={{ y:0 }} exit={{ y:'100%' }}
               transition={{ type:'spring', stiffness:400, damping:35 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900 border-t border-white/10 rounded-t-3xl p-6"
+              className="fixed bottom-0 left-0 right-0 z-50 bg-[#100e16] border-t border-white/10 rounded-t-3xl p-6"
               style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
               <h3 className="text-white font-bold text-lg mb-1">Change Seat</h3>
               <p className="text-white/40 text-sm mb-4">Select a player slot to take over.</p>
@@ -723,14 +822,14 @@ export default function PlayerView() {
                     onClick={() => {
                       const url = new URL(window.location.href);
                       url.searchParams.set('playerIndex', i);
-                      url.searchParams.set('playerName', encodeURIComponent(p.name || `Player ${i+1}`));
+                      url.searchParams.set('playerName', p.name || `Player ${i+1}`);
                       window.location.href = url.toString();
                     }}
                     className={`flex items-center gap-2 p-3 rounded-xl border text-left ${
                       i === playerIndex ? 'border-white/40 bg-white/15 text-white' : 'border-white/10 bg-white/5 text-white/60'
                     }`}>
                     <div className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ background: { purple:'#a855f7',blue:'#3b82f6',red:'#ef4444',green:'#22c55e',gold:'#eab308',white:'#94a3b8' }[p.color||'purple'] }} />
+                      style={{ background: accentOf(p.color, i) }} />
                     <div>
                       <div className="font-semibold text-sm">{p.name||`Player ${i+1}`}</div>
                       <div className="text-xs opacity-50">{p.life} life{i===playerIndex?' · you':''}</div>
@@ -763,6 +862,30 @@ export default function PlayerView() {
         <CardOverlay card={cardOverlay} onDismiss={() => setCardOverlay(null)} />
       )}
 
+      {/* ── Rename modal ── */}
+      <AnimatePresence>
+        {renaming && (
+          <>
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              className="fixed inset-0 bg-black/70 z-50" onClick={() => setRenaming(false)} />
+            <motion.div
+              initial={{ y:'100%' }} animate={{ y:0 }} exit={{ y:'100%' }}
+              transition={{ type:'spring', stiffness:400, damping:35 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-[#100e16] border-t border-white/10 rounded-t-3xl p-6"
+              style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+              <h3 className="font-display text-white text-lg mb-3">Your name</h3>
+              <input autoFocus value={nameDraft} maxLength={24} onChange={e => setNameDraft(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveName()}
+                className="input-dark mb-3" />
+              <div className="flex gap-2">
+                <button onClick={() => setRenaming(false)} className="flex-1 py-3 rounded-xl bg-white/10 text-white/60 font-medium">Cancel</button>
+                <button onClick={saveName} className="flex-1 btn-gold !py-3">Save</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* ── Reminder modal ── */}
       <AnimatePresence>
         {editingReminder && (
@@ -772,7 +895,7 @@ export default function PlayerView() {
             <motion.div
               initial={{ y:'100%' }} animate={{ y:0 }} exit={{ y:'100%' }}
               transition={{ type:'spring', stiffness:400, damping:35 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900 border-t border-white/10 rounded-t-3xl p-6"
+              className="fixed bottom-0 left-0 right-0 z-50 bg-[#100e16] border-t border-white/10 rounded-t-3xl p-6"
               style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
               <h3 className="text-white font-bold text-lg mb-2">Turn Reminder</h3>
               <p className="text-white/50 text-sm mb-3">Shown at the start of your turn.</p>

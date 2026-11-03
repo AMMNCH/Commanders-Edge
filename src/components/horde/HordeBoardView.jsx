@@ -35,7 +35,7 @@ function CounterMenu({ creature, menuPos, onClose, onCounter, onRemove }) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.88, y: -6 }}
         transition={{ duration: 0.15 }}
-        className="fixed bg-slate-900 border border-white/25 rounded-2xl p-3 shadow-2xl"
+        className="fixed bg-[#100e16] border border-white/25 rounded-2xl p-3 shadow-2xl"
         style={{ left, top, width: menuWidth, zIndex: 99999 }}
         onClick={e => e.stopPropagation()}
         onPointerDown={e => e.stopPropagation()}
