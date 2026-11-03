@@ -19,7 +19,8 @@ export const BOARD_COUNTERS = [
   { id: 'charge', label: 'Charge', color: '#facc15' },
 ];
 
-const CARD_W = 96;
+// Horde-board sizing: big cards on tablets, a little smaller on phones.
+const CARD_W = typeof window !== 'undefined' && window.innerWidth >= 700 ? 130 : 100;
 const CARD_H = Math.round(CARD_W * 88 / 63);
 const GAP = 12;
 
@@ -195,11 +196,12 @@ function BoardCard({ card, index, boardWidth, readOnly, accent, onTap, onMove, o
       <div className={`relative rounded-[7px] border-2 shadow-2xl ${card.tapped ? 'opacity-75' : ''}`}
         style={{ borderColor: card.tapped ? 'rgba(255,255,255,0.2)' : `${accent}cc` }}>
         <CardImage card={card} className="w-full rounded-[5px] pointer-events-none" style={{ aspectRatio: '63/88' }} />
-        {(st || card.tapped) && (
-          <div className="absolute bottom-0 inset-x-0 bg-black/75 rounded-b-[5px] px-1.5 py-0.5 flex items-center justify-between">
-            <span className="text-[9px] font-bold text-white/60">{card.tapped ? 'TAPPED' : ''}</span>
-            {st && <span className="text-[11px] font-black" style={{ color: accent }}>{st}</span>}
-          </div>
+        <div className="absolute bottom-0 inset-x-0 bg-black/75 rounded-b-[5px] px-1.5 py-1 flex items-center justify-between gap-1">
+          <span className="text-[10px] font-bold text-white truncate">{card.name}</span>
+          {st && <span className="text-xs font-black flex-shrink-0" style={{ color: accent }}>{st}</span>}
+        </div>
+        {card.tapped && (
+          <span className="absolute top-1 left-1 bg-black/70 rounded px-1 py-0.5 text-[8px] font-bold text-white/60">TAP</span>
         )}
         {counters.map(([k, v], i) => {
           const ct = BOARD_COUNTERS.find((c) => c.id === k);

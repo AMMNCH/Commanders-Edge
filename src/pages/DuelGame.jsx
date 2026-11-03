@@ -419,7 +419,7 @@ export default function DuelGame() {
       const expanded = [];
       raw.forEach(card => {
         for (let q = 0; q < (card.quantity || 1); q++) {
-          expanded.push({ id: uid(), name: card.name, image_url: card.image_url || '', scryfall_id: card.scryfall_id || null });
+          expanded.push({ id: uid(), name: card.name, image_url: card.image_url || '', scryfall_id: card.scryfall_id || null, power: card.power ?? null, toughness: card.toughness ?? null, type: card.type || '' });
         }
       });
       const shuffled = shuffle(expanded);
