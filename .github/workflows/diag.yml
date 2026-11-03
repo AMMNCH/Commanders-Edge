@@ -1,0 +1,33 @@
+name: diag-archidekt
+on:
+  push:
+    branches: [diag-archidekt]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Archidekt and relays
+        run: |
+          O="Origin: https://ammnch.github.io"
+          for u in \
+            "https://archidekt.com/api/decks/14967989/" \
+            "https://archidekt.com/api/decks/14967989/?format=json" \
+            "https://archidekt.com/api/decks/14967989/small/" \
+            "https://archidekt.com/api/decks/v3/?ownerUsername=test&pageSize=1" \
+            "https://www.archidekt.com/api/decks/14967989/" ; do
+            echo "=== $u"
+            curl -s -o /tmp/body -D - -H "$O" "$u" | grep -iE "^HTTP|access-control|location|content-type|server|cf-" || true
+            head -c 200 /tmp/body; echo
+          done
+          echo "=== OPTIONS preflight"
+          curl -s -o /dev/null -D - -X OPTIONS -H "$O" -H "Access-Control-Request-Method: GET" "https://archidekt.com/api/decks/14967989/" | grep -iE "^HTTP|access-control" || true
+          for r in \
+            "https://api.allorigins.win/raw?url=https%3A%2F%2Farchidekt.com%2Fapi%2Fdecks%2F14967989%2F" \
+            "https://corsproxy.io/?url=https%3A%2F%2Farchidekt.com%2Fapi%2Fdecks%2F14967989%2F" \
+            "https://api.codetabs.com/v1/proxy?quest=https%3A%2F%2Farchidekt.com%2Fapi%2Fdecks%2F14967989%2F" \
+            "https://thingproxy.freeboard.io/fetch/https://archidekt.com/api/decks/14967989/" \
+            "https://cors.eu.org/https://archidekt.com/api/decks/14967989/" ; do
+            echo "=== $r"
+            curl -s -m 15 -o /tmp/body -D - -H "$O" "$r" | grep -iE "^HTTP|access-control|content-type" || echo "(no response)"
+            head -c 150 /tmp/body; echo
+          done
