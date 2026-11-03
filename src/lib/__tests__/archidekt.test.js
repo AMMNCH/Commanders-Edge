@@ -57,12 +57,46 @@ describe('archidekt relays', () => {
     const { fetchArchidektJson } = await import('@/lib/archidekt');
     const data = await fetchArchidektJson('https://archidekt.com/api/decks/1/', fake);
     expect(data.name).toBe('Relayed');
-    expect(calls[1]).toContain('corsproxy.io');
+    expect(calls.length).toBeGreaterThan(1);
   });
 
   it('stops on a real 404', async () => {
     const { fetchArchidektJson } = await import('@/lib/archidekt');
     await expect(fetchArchidektJson('https://archidekt.com/api/decks/9/', async () => ({ ok: false, status: 404 })))
       .rejects.toThrow("can't find that deck");
+  });
+});
+
+describe('pasted deck lists', () => {
+  it('parses Archidekt, Moxfield and plain exports', async () => {
+    const { parseDeckText } = await import('@/lib/archidekt');
+    const list = parseDeckText(`Commander
+1x Wilhelt, the Rotcleaver (vow) 248 [Commander{top}]
+
+1 Sol Ring (c21) 263 *F*
+30 Swamp
+1x Delver of Secrets // Insectile Aberration (mid) 47 [Creature]
+1 Maybe Card [Maybeboard]
+
+Sideboard
+1 Not Me`);
+    expect(list.map((c) => [c.quantity, c.name, c.is_commander])).toEqual([
+      [1, 'Wilhelt, the Rotcleaver', true],
+      [1, 'Sol Ring', false],
+      [30, 'Swamp', false],
+      [1, 'Delver of Secrets // Insectile Aberration', false],
+    ]);
+  });
+
+  it('builds a deck from Scryfall and reports missing cards', async () => {
+    const { deckFromText } = await import('@/lib/archidekt');
+    const fake = async (_u, opts) => {
+      const ids = JSON.parse(opts.body).identifiers;
+      return { ok: true, json: async () => ({ data: ids.filter((i) => i.name !== 'Fake Card').map((i) => ({ id: 'abcd-1', name: i.name, type_line: 'Creature', image_uris: { normal: 'x.jpg' } })) }) };
+    };
+    const { deck, missing } = await deckFromText('1 Wilhelt *CMDR*\n2 Gravecrawler\n1 Fake Card', {}, fake);
+    expect(deck.card_count).toBe(4);
+    expect(deck.cards[0]).toMatchObject({ name: 'Wilhelt', is_commander: true, scryfall_id: 'abcd-1' });
+    expect(missing).toEqual(['Fake Card']);
   });
 });

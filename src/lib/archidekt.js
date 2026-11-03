@@ -110,31 +110,123 @@ async function fetchTokenCards(tokenStats, fetchImpl) {
 
 /**
  * Archidekt's API doesn't send CORS headers, so browsers block direct reads
- * from other sites. Try direct first, then public CORS relays.
+ * from other sites. Race the direct request and several public CORS relays;
+ * the first good answer wins.
  */
 const RELAYS = [
   (u) => u,
-  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
+  (u) => `https://cors.eu.org/${u}`,
 ];
+const RELAY_TIMEOUT_MS = 12000;
+
+async function tryRoute(url, fetchImpl) {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = setTimeout(() => ctrl?.abort(), RELAY_TIMEOUT_MS);
+  try {
+    const res = await fetchImpl(url, ctrl ? { signal: ctrl.signal } : undefined);
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+    const data = await res.json();
+    if (!data || typeof data !== 'object') throw new Error('Not JSON');
+    if (data.detail && !data.cards && !data.results) throw Object.assign(new Error(String(data.detail)), { status: 404 });
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function fetchArchidektJson(url, fetchImpl = fetch) {
-  let lastStatus = null;
-  for (const wrap of RELAYS) {
-    try {
-      const res = await fetchImpl(wrap(url));
-      if (res.ok) {
-        const data = await res.json();
-        if (data && typeof data === 'object') return data;
-      } else {
-        lastStatus = res.status;
-        if (res.status === 404) break; // the deck really isn't there
-      }
-    } catch (_) { /* blocked or offline: try the next route */ }
+  const attempts = RELAYS.map((wrap) => tryRoute(wrap(url), fetchImpl));
+  try {
+    return await Promise.any(attempts);
+  } catch (agg) {
+    const errors = agg?.errors || [];
+    if (errors.some((e) => e?.status === 404)) {
+      throw new Error("Archidekt can't find that deck. Check the link, and make sure the deck is public.");
+    }
+    throw new Error("Couldn't reach Archidekt right now. Try again, or paste the deck list instead.");
   }
-  if (lastStatus === 404) throw new Error("Archidekt can't find that deck. Check the link, and make sure the deck is public.");
-  throw new Error("Couldn't reach Archidekt. Check your connection and try again.");
+}
+
+// ── Pasted deck lists (Archidekt/Moxfield/MTGO text exports) ────────────────
+const SKIP_SECTIONS = /^(maybe(board)?|sideboard|considering|tokens?)$/i;
+
+/** Parse a text deck list into [{ name, quantity, is_commander }]. */
+export function parseDeckText(text) {
+  const out = [];
+  let section = '';
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) { section = ''; continue; } // a blank line ends a section
+    if (line.startsWith('//')) continue;
+    const header = line.replace(/[:\s]+$/, '');
+    if (!/^\d/.test(line)) { section = header.replace(/\s*\(\d+\)$/, ''); continue; }
+    const m = line.match(/^(\d+)\s*x?\s+(.+)$/i);
+    if (!m) continue;
+    let rest = m[2];
+    let cats = '';
+    const bracket = rest.match(/\[(.*?)\]/);
+    if (bracket) { cats = bracket[1]; rest = rest.replace(/\[.*?\]/g, ''); }
+    const isCmdrMark = /\*cmdr\*/i.test(rest);
+    rest = rest
+      .replace(/\^[^^]*\^/g, '')        // Archidekt colour tags
+      .replace(/\*[a-z]+\*/gi, '')       // *CMDR*, *F* (foil)
+      .replace(/\s+\([a-z0-9]{2,6}\)\s*[\w★-]*\s*$/i, '') // (SET) 123
+      .trim();
+    if (!rest) continue;
+    const allCats = `${section},${cats}`;
+    if (SKIP_SECTIONS.test(section) || /maybeboard|sideboard/i.test(cats)) continue;
+    out.push({ name: rest, quantity: parseInt(m[1], 10) || 1, is_commander: isCmdrMark || /commander/i.test(allCats) });
+  }
+  return out;
+}
+
+/** Look cards up on Scryfall (CORS-friendly) and build a deck like parseArchidektDeck does. */
+export async function deckFromText(text, { name = 'Pasted deck' } = {}, fetchImpl = fetch) {
+  const entries = parseDeckText(text);
+  if (!entries.length) throw new Error('No cards found. Paste one card per line, like "1 Sol Ring".');
+  const unique = [...new Map(entries.map((e) => [e.name.toLowerCase(), e])).values()];
+  const found = new Map();
+  for (let i = 0; i < unique.length; i += 75) {
+    const chunk = unique.slice(i, i + 75).map((e) => ({ name: e.name.split(' // ')[0] }));
+    const res = await fetchImpl('https://api.scryfall.com/cards/collection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifiers: chunk }),
+    });
+    if (!res.ok) throw new Error(`Scryfall returned ${res.status}`);
+    const data = await res.json();
+    (data.data || []).forEach((c) => {
+      found.set(c.name.toLowerCase(), c);
+      found.set(c.name.split(' // ')[0].toLowerCase(), c);
+    });
+    if (i + 75 < unique.length) await new Promise((r) => setTimeout(r, 120));
+  }
+  const missing = [];
+  const cards = entries.map((e) => {
+    const c = found.get(e.name.toLowerCase()) || found.get(e.name.split(' // ')[0].toLowerCase());
+    if (!c) missing.push(e.name);
+    const face = c?.card_faces?.[0];
+    return {
+      name: c?.name || e.name,
+      quantity: e.quantity,
+      type: c?.type_line || face?.type_line || '',
+      power: c?.power ?? face?.power ?? null,
+      toughness: c?.toughness ?? face?.toughness ?? null,
+      image_url: c?.image_uris?.normal || face?.image_uris?.normal || null,
+      scryfall_id: c?.id || null,
+      categories: e.is_commander ? ['Commander'] : [],
+      is_token: false,
+      is_commander: e.is_commander,
+    };
+  });
+  return {
+    deck: { name, cards, card_count: cards.reduce((s, c) => s + c.quantity, 0), archidekt_id: null },
+    missing,
+  };
 }
 
 /** Fetch + parse a deck from the browser. Returns `{ deck }`. */

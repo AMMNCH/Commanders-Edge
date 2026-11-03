@@ -12,7 +12,7 @@ import {
 import { createPageUrl } from '@/utils';
 import { getQuery } from '@/lib/nav';
 import { functions } from '@/api/backend';
-import { extractArchidektId } from '@/lib/archidekt';
+import { extractArchidektId, deckFromText } from '@/lib/archidekt';
 import { createBoard, boardReducer, isLand, ZONE_LABEL } from '@/lib/deckBoard';
 import CardImage from '@/components/mtg/CardImage';
 import CardZoom from '@/components/mtg/CardZoom';
@@ -89,7 +89,25 @@ function DeckLoader({ onLoaded, initialId }) {
   const [input, setInput] = useState(initialId ? `https://archidekt.com/decks/${initialId}` : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [tab, setTab] = useState('link'); // 'link' | 'paste'
+  const [listText, setListText] = useState('');
+  const [listName, setListName] = useState('');
   const recent = useMemo(() => load(RECENT_KEY, []), []);
+
+  const goList = async () => {
+    setBusy(true); setError('');
+    try {
+      const { deck, missing: miss } = await deckFromText(listText, { name: listName.trim() || 'Pasted deck' });
+      const board = createBoard(deck);
+      board.deck.missing = miss; // shown on the board so nothing silently disappears
+      onLoaded(board);
+    } catch (e) {
+      const msg = e?.message || '';
+      setError(/failed to fetch|load failed|networkerror/i.test(msg) ? "Couldn't reach Scryfall. Check your connection and try again." : (msg || 'Could not read that list.'));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const go = async (value) => {
     const id = extractArchidektId(value);
@@ -123,16 +141,46 @@ function DeckLoader({ onLoaded, initialId }) {
             <p className="text-white/45 text-xs">Load an Archidekt deck and play it on your own board.</p>
           </div>
         </div>
-        <div className="card-glass p-4 mt-5 space-y-3">
-          <label htmlFor="deck-url" className="label-caps">Archidekt deck link</label>
-          <input id="deck-url" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && go(input)}
-            placeholder="https://archidekt.com/decks/…" className="input-dark text-sm" inputMode="url" autoComplete="off" />
-          {error && <p className="text-red-300 text-sm">{error}</p>}
-          {error && <p className="text-white/25 text-[10px]">Version {typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 'dev'}</p>}
-          <button onClick={() => go(input)} disabled={busy} className="btn-gold w-full flex items-center justify-center gap-2">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {busy ? 'Loading deck…' : 'Load deck'}
-          </button>
+        <div className="flex gap-1 mt-5 p-1 rounded-xl bg-white/5">
+          {[['link', 'Deck link'], ['paste', 'Paste deck list']].map(([k, label]) => (
+            <button key={k} onClick={() => { setTab(k); setError(''); }}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold ${tab === k ? 'bg-white/15 text-white' : 'text-white/45'}`}>{label}</button>
+          ))}
         </div>
+
+        {tab === 'link' ? (
+          <div className="card-glass p-4 mt-3 space-y-3">
+            <label htmlFor="deck-url" className="label-caps">Archidekt deck link</label>
+            <input id="deck-url" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && go(input)}
+              placeholder="https://archidekt.com/decks/…" className="input-dark text-sm" inputMode="url" autoComplete="off" />
+            {error && <p className="text-red-300 text-sm">{error}</p>}
+            {error && (
+              <button onClick={() => { setTab('paste'); setError(''); }} className="text-gold text-sm font-semibold underline underline-offset-4">
+                Paste the deck list instead
+              </button>
+            )}
+            {error && <p className="text-white/25 text-[10px]">Version {typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 'dev'}</p>}
+            <button onClick={() => go(input)} disabled={busy} className="btn-gold w-full flex items-center justify-center gap-2">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {busy ? 'Loading deck…' : 'Load deck'}
+            </button>
+          </div>
+        ) : (
+          <div className="card-glass p-4 mt-3 space-y-3">
+            <p className="text-white/55 text-xs leading-relaxed">
+              On Archidekt, open your deck, tap <b className="text-white/80">Export</b> (in the deck&apos;s menu) and copy the text. Lists from Moxfield or any other site work too. One card per line, like <span className="text-white/80">1 Sol Ring</span>. Cards marked Commander start in the command zone.
+            </p>
+            <label htmlFor="deck-name" className="label-caps">Deck name</label>
+            <input id="deck-name" value={listName} onChange={(e) => setListName(e.target.value)} placeholder="My deck" className="input-dark text-sm" />
+            <label htmlFor="deck-list" className="label-caps">Deck list</label>
+            <textarea id="deck-list" value={listText} onChange={(e) => setListText(e.target.value)} rows={9}
+              placeholder={'1x Wilhelt, the Rotcleaver [Commander]\n1 Sol Ring\n30 Swamp'}
+              className="input-dark text-sm font-mono leading-relaxed" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+            {error && <p className="text-red-300 text-sm">{error}</p>}
+            <button onClick={goList} disabled={busy || !listText.trim()} className="btn-gold w-full flex items-center justify-center gap-2">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {busy ? 'Looking up cards…' : 'Load list'}
+            </button>
+          </div>
+        )}
         {recent.length > 0 && (
           <>
             <p className="label-caps mt-6 mb-2">Recent decks</p>
@@ -261,6 +309,13 @@ export default function DeckBoard() {
           className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center disabled:opacity-30"><Undo2 className="w-4 h-4" /></button>
         <button onClick={() => setSheet('menu')} aria-label="More" className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><MoreHorizontal className="w-4 h-4" /></button>
       </div>
+
+      {state.deck.missing?.length > 0 && (
+        <div className="flex-shrink-0 mx-3 mt-2 flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-400/30 px-3 py-2">
+          <p className="flex-1 text-amber-100 text-xs">Scryfall couldn&apos;t find: {state.deck.missing.join(', ')}. Check the spelling in your list.</p>
+          <button onClick={() => dispatch({ type: 'load', state: { ...state, deck: { ...state.deck, missing: [] } } })} aria-label="Dismiss" className="text-amber-200/70"><X className="w-4 h-4" /></button>
+        </div>
+      )}
 
       {/* Zones */}
       <div className="flex-shrink-0 flex gap-1.5 px-3 py-2">
