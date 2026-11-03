@@ -36,6 +36,14 @@ optional Base44 backend, each player can also track the game on their own phone.
 - Also: card lookup (shows a card to the table), dice and a coin, and the
   screen stays on while a table is open.
 
+## Live site
+
+Every push to `main` deploys to GitHub Pages through
+`.github/workflows/pages.yml`: https://ammnch.github.io/Commanders-Edge/
+
+To turn it on once: repo **Settings → Pages → Build and deployment → Source:
+GitHub Actions**.
+
 ## Development
 
 ```bash
