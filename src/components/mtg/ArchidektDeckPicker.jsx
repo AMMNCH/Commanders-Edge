@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, ChevronDown, User, X, Search, Play } from 'lucide-react';
-import { parseArchidektDeck } from '@/lib/archidekt';
+import { parseArchidektDeck, fetchArchidektJson } from '@/lib/archidekt';
 import { createPageUrl } from '@/utils';
 import { pageHref } from '@/lib/nav';
 import CardImage from './CardImage';
@@ -44,9 +44,7 @@ export default function ArchidektDeckPicker({ onDeckLoaded, onCardSelected, acce
     setDeckCards([]);
     try {
       // ownerUsername does an exact-match lookup (unlike owner which is fuzzy)
-      const res = await fetch(`https://archidekt.com/api/decks/v3/?format=json&ownerUsername=${encodeURIComponent(u.trim())}&pageSize=100&page=1&orderBy=-updatedAt`);
-      if (!res.ok) throw new Error('Could not reach Archidekt');
-      const data = await res.json();
+      const data = await fetchArchidektJson(`https://archidekt.com/api/decks/v3/?format=json&ownerUsername=${encodeURIComponent(u.trim())}&pageSize=100&page=1&orderBy=-updatedAt`);
       const allDecks = data.results || [];
 
       if (allDecks.length === 0) {
@@ -70,9 +68,7 @@ export default function ArchidektDeckPicker({ onDeckLoaded, onCardSelected, acce
     setDeckCards([]);
     setCardSearch('');
     try {
-      const res = await fetch(`https://archidekt.com/api/decks/${deck.id}/?format=json`);
-      if (!res.ok) throw new Error('Could not load deck');
-      const data = await res.json();
+      const data = await fetchArchidektJson(`https://archidekt.com/api/decks/${deck.id}/?format=json`);
       // Same parser as the deck board, so images use Scryfall's real links.
       const cards = parseArchidektDeck(data).deck.cards
         .filter((c, i, arr) => arr.findIndex(x => x.name === c.name) === i);

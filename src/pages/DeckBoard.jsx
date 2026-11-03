@@ -102,7 +102,8 @@ function DeckLoader({ onLoaded, initialId }) {
       save(RECENT_KEY, [{ id, name: deck.name }, ...load(RECENT_KEY, []).filter((d) => String(d.id) !== String(id))].slice(0, 8));
       onLoaded(createBoard(deck));
     } catch (e) {
-      setError(e?.message?.includes('Failed to fetch') ? "Couldn't reach Archidekt. Check your connection and that the deck is public." : (e?.message || 'Could not load that deck.'));
+      const msg = e?.message || '';
+      setError(/failed to fetch|load failed|networkerror/i.test(msg) ? "Couldn't reach Archidekt. Check your connection and that the deck is public." : (msg || 'Could not load that deck.'));
     } finally {
       setBusy(false);
     }

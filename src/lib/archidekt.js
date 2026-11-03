@@ -108,13 +108,41 @@ async function fetchTokenCards(tokenStats, fetchImpl) {
   return tokens;
 }
 
-/** Fetch + parse a deck directly from the browser. Returns `{ deck }`. */
+/**
+ * Archidekt's API doesn't send CORS headers, so browsers block direct reads
+ * from other sites. Try direct first, then public CORS relays.
+ */
+const RELAYS = [
+  (u) => u,
+  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+];
+
+export async function fetchArchidektJson(url, fetchImpl = fetch) {
+  let lastStatus = null;
+  for (const wrap of RELAYS) {
+    try {
+      const res = await fetchImpl(wrap(url));
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data === 'object') return data;
+      } else {
+        lastStatus = res.status;
+        if (res.status === 404) break; // the deck really isn't there
+      }
+    } catch (_) { /* blocked or offline: try the next route */ }
+  }
+  if (lastStatus === 404) throw new Error("Archidekt can't find that deck. Check the link, and make sure the deck is public.");
+  throw new Error("Couldn't reach Archidekt. Check your connection and try again.");
+}
+
+/** Fetch + parse a deck from the browser. Returns `{ deck }`. */
 export async function fetchArchidektDeck({ deck_id, deck_url, url } = {}, fetchImpl = fetch) {
   const id = extractArchidektId(deck_id ?? deck_url ?? url);
   if (!id) throw new Error('Paste an Archidekt deck link like archidekt.com/decks/12345');
-  const res = await fetchImpl(`https://archidekt.com/api/decks/${id}/`);
-  if (!res.ok) throw new Error(`Archidekt returned ${res.status}`);
-  const { deck, tokenStats } = parseArchidektDeck(await res.json());
+  const data = await fetchArchidektJson(`https://archidekt.com/api/decks/${id}/`, fetchImpl);
+  const { deck, tokenStats } = parseArchidektDeck(data);
   deck.cards = [...deck.cards, ...(await fetchTokenCards(tokenStats, fetchImpl))];
   return { deck };
 }

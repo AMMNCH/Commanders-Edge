@@ -45,3 +45,24 @@ describe('random', () => {
     expect(shuffle([1, 2, 3, 4]).sort()).toEqual([1, 2, 3, 4]);
   });
 });
+
+describe('archidekt relays', () => {
+  it('falls back to a relay when the direct request is blocked', async () => {
+    const calls = [];
+    const fake = async (u) => {
+      calls.push(u);
+      if (u.startsWith('https://archidekt.com')) throw new TypeError('Load failed');
+      return { ok: true, json: async () => ({ id: 1, name: 'Relayed', cards: [] }) };
+    };
+    const { fetchArchidektJson } = await import('@/lib/archidekt');
+    const data = await fetchArchidektJson('https://archidekt.com/api/decks/1/', fake);
+    expect(data.name).toBe('Relayed');
+    expect(calls[1]).toContain('corsproxy.io');
+  });
+
+  it('stops on a real 404', async () => {
+    const { fetchArchidektJson } = await import('@/lib/archidekt');
+    await expect(fetchArchidektJson('https://archidekt.com/api/decks/9/', async () => ({ ok: false, status: 404 })))
+      .rejects.toThrow("can't find that deck");
+  });
+});
