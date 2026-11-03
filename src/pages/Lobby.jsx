@@ -12,6 +12,7 @@ import RecentGames, { saveRecentGame } from '@/components/lobby/RecentGames';
 import HordeDeckSelector from '@/components/horde/HordeDeckSelector';
 import { loadCurrentTable, listGames } from '@/lib/history';
 import { COLOR_KEYS, accentOf } from '@/lib/theme';
+import { useLinkStatus } from '@/lib/p2p';
 import iconUrl from '@/assets/icon.svg';
 
 function calcHordeSharedLife(playerCount) {
@@ -78,6 +79,18 @@ function Segmented({ options, value, onChange, accent = '#d4a64a' }) {
         </button>
       ))}
     </div>
+  );
+}
+
+function HostStatus({ code }) {
+  const st = useLinkStatus(code);
+  const ready = st.state === 'hosting';
+  return (
+    <p className={`text-xs mt-2 ${ready ? 'text-emerald-300' : st.state === 'offline' ? 'text-red-300' : 'text-white/45'}`}>
+      {ready
+        ? (st.peers ? `${st.peers} other phone${st.peers === 1 ? '' : 's'} connected` : 'Ready for other phones to join')
+        : st.state === 'offline' ? "Can't reach the matchmaking service. Check your connection." : 'Opening the game to other phones…'}
+    </p>
   );
 }
 
@@ -178,7 +191,7 @@ export default function Lobby() {
     try {
       const results = await db.GameSession.filter({ code: joinCode.toUpperCase().trim() });
       if (!results?.length) {
-        setError(isCloud ? 'No game with that code.' : 'No game with that code on this device. Linked games need online mode to sync between phones.');
+        setError(isCloud ? 'No game with that code.' : "Couldn't reach that game. Check the code, and make sure the host's phone has the game open.");
         return;
       }
       const s = results[0];
@@ -250,9 +263,9 @@ export default function Lobby() {
                   </div>
                 </div>
                 <span className={`flex-shrink-0 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border ${isCloud ? 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10' : 'text-white/50 border-white/10 bg-white/5'}`}
-                  title={isCloud ? 'Linked games sync between phones' : 'Data stays on this device'}>
+                  title={isCloud ? 'Linked games sync through the server' : 'Linked games connect phone-to-phone'}>
                   {isCloud ? <Cloud className="w-3 h-3" /> : <CloudOff className="w-3 h-3" />}
-                  {isCloud ? 'Online' : 'Offline'}
+                  {isCloud ? 'Online' : 'No server'}
                 </span>
               </div>
 
@@ -285,7 +298,7 @@ export default function Lobby() {
 
               {!isCloud && (
                 <p className="text-white/35 text-[11px] mt-3 px-1 leading-relaxed">
-                  Offline mode: linked games only sync between tabs on this device. Connect a Base44 backend to sync between phones (see the README).
+                  Linked and Horde games connect phone-to-phone: the host&apos;s phone runs the game, so keep it open while you play.
                 </p>
               )}
 
@@ -347,6 +360,7 @@ export default function Lobby() {
               <div className="card-glass p-5 text-center">
                 <p className="label-caps">Join code</p>
                 <p className="font-display text-5xl tracking-[0.2em] text-gold mt-2 select-all">{created.code}</p>
+                {!isCloud && <HostStatus code={created.code} />}
                 <div className="flex justify-center gap-2 mt-4">
                   <button onClick={copyCode} className="chip gap-1.5">
                     {copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />} {copied ? 'Copied' : 'Copy'}
@@ -412,7 +426,7 @@ export default function Lobby() {
                 </button>
               ) : (
                 <button onClick={findGame} disabled={loading || joinCode.length < 4} className="btn-gold w-full flex items-center justify-center gap-2">
-                  {loading && <Loader2 className="w-4 h-4 animate-spin" />} Find game
+                  {loading && <Loader2 className="w-4 h-4 animate-spin" />} {loading && !isCloud ? 'Connecting to host…' : 'Find game'}
                 </button>
               )}
             </motion.div>

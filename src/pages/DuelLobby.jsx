@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Swords, Link, ArrowRight, Copy, Check, Shuffle } from 'lucide-react';
-import { db } from '@/api/backend';
+import { db, isCloud } from '@/api/backend';
 import { createPageUrl } from '@/utils';
 import { goTo } from '@/lib/nav';
 
@@ -80,7 +80,7 @@ export default function DuelLobby() {
     setLoading(true);
     setError('');
     const results = await db.DuelGame.filter({ code: joinCode.toUpperCase().trim() });
-    if (!results || results.length === 0) { setError('Game not found.'); setLoading(false); return; }
+    if (!results || results.length === 0) { setError(isCloud ? 'Game not found.' : "Couldn't reach that duel. Check the code, and make sure your opponent has the duel open."); setLoading(false); return; }
     const game = results[0];
     if (game.status === 'ended') { setError('That game has ended.'); setLoading(false); return; }
     // Update player 1 slot
@@ -165,11 +165,11 @@ export default function DuelLobby() {
               <ArrowRight className="inline w-5 h-5 mr-2" />
               Join with Code
             </button>
-            <button onClick={() => setView('matchmaking')}
+            {isCloud && <button onClick={() => setView('matchmaking')}
               className="w-full py-4 rounded-2xl bg-white/10 border border-white/20 text-white font-bold text-lg active:scale-95 transition-transform">
               <Shuffle className="inline w-5 h-5 mr-2" />
               Find Random Opponent
-            </button>
+            </button>}
             <button onClick={() => goTo(createPageUrl('Lobby'))}
               className="w-full text-white/30 text-sm py-2">← Back to Commander Lobby</button>
           </div>

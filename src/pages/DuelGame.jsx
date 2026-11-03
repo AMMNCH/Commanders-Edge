@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { db, functions } from '@/api/backend';
+import { db, functions, isCloud } from '@/api/backend';
 import { createPageUrl } from '@/utils';
 import { getQuery, goTo } from '@/lib/nav';
 import {
@@ -733,7 +733,7 @@ export default function DuelGame() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {game.voice_channel_id && myPlayer && (
+          {isCloud && game.voice_channel_id && myPlayer && (
             <VoiceChat channelId={game.voice_channel_id} playerIndex={myIdx} playerName={myPlayer.name || `P${myIdx + 1}`} />
           )}
           <button onClick={() => { setShowChat(v => !v); setUnreadChat(0); }}

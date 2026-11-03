@@ -10,6 +10,7 @@
  * `?local=0` to go back to cloud.
  */
 import { createLocalEntity } from '@/lib/localDb';
+import { withP2P } from '@/lib/p2p';
 import { fetchArchidektDeck as fetchArchidektDeckDirect } from '@/lib/archidekt';
 import { appParams } from '@/lib/app-params';
 import { base44 } from '@/api/base44Client';
@@ -36,8 +37,16 @@ function cloudEntity(name) {
   };
 }
 
+function localEntity(name) {
+  const e = createLocalEntity(name);
+  // Without a server, linked games sync phone-to-phone (see lib/p2p.js).
+  if (name === 'GameSession') return withP2P(e, 'game');
+  if (name === 'DuelGame') return withP2P(e, 'duel');
+  return e;
+}
+
 export const db = Object.fromEntries(
-  ENTITIES.map((name) => [name, isCloud ? cloudEntity(name) : createLocalEntity(name)])
+  ENTITIES.map((name) => [name, isCloud ? cloudEntity(name) : localEntity(name)])
 );
 
 export const functions = {

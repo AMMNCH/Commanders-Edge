@@ -39,7 +39,7 @@ export default function RecentGames({ onJoin }) {
 
     Promise.all(
       stored.map(g =>
-        db.GameSession.filter({ code: g.code })
+        (db.GameSession.peek || db.GameSession.filter)({ code: g.code })
           .then(res => res?.[0] ? { ...g, session: res[0] } : null)
           .catch(() => null)
       )

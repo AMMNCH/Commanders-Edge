@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db, patchDoc } from '@/api/backend';
+import { db, patchDoc, isCloud } from '@/api/backend';
+import { useLinkStatus } from '@/lib/p2p';
 import { Minus, Plus, Bell, Leaf, ChevronDown, ArrowRight, MoreHorizontal, Users, Repeat, SkipForward, LogOut, Trophy, SlidersHorizontal, BarChart2, Search, Skull, Swords, Droplet, Pencil } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { getQuery, goTo, pageHref } from '@/lib/nav';
@@ -29,6 +30,16 @@ const PLAYER_COLORS = {
   pink:   { bg: 'from-pink-950 to-rose-900',    border: 'border-pink-500/60',   accent: '#f472b6' },
 };
 const COLORS_LIST = ['purple','blue','red','green','gold','white'];
+
+function LinkChip({ code }) {
+  const st = useLinkStatus(code);
+  if (st.state === 'idle') return null;
+  const ok = st.state === 'hosting' || st.state === 'connected';
+  const label = st.role === 'host'
+    ? (ok ? `hosting · ${st.peers} linked` : 'opening…')
+    : (ok ? 'linked' : 'reconnecting…');
+  return <span className={ok ? 'text-emerald-300/80' : 'text-amber-300'}> · {label}</span>;
+}
 
 export default function PlayerView() {
   const params = getQuery();
@@ -402,7 +413,7 @@ export default function PlayerView() {
               <h2 className="text-white font-black text-lg leading-none">{myPlayer?.name || playerName}</h2>
               <Pencil className="w-3 h-3 text-white/30" />
             </button>
-            <p className="text-white/40 text-xs mt-0.5">Code: {session.code} · Turn {session.turn_number}</p>
+            <p className="text-white/40 text-xs mt-0.5">Code: {session.code} · Turn {session.turn_number}{!isCloud && <LinkChip code={session.code} />}</p>
           </div>
           <div className="flex items-center gap-2">
             {isHordeMode ? (

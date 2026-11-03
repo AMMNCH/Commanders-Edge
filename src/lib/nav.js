@@ -21,6 +21,10 @@ export function getQuery() {
 
 /** Full navigation (re-mounts the page), used where pages rely on a fresh load. */
 export function goTo(path) {
-  window.location.href = pageHref(path);
-  if (HASH_ROUTING) window.location.reload();
+  if (!HASH_ROUTING) { window.location.href = path; return; }
+  const route = (h) => h.replace(/^#/, '').split('?')[0];
+  const sameRoute = route(window.location.hash || '#/') === route(path);
+  window.location.hash = path;
+  // Same page with new params (e.g. switching seats) needs a fresh mount.
+  if (sameRoute) window.location.reload();
 }

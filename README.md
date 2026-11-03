@@ -58,9 +58,13 @@ npm run build
 
 The app picks its backend in `src/api/backend.js`:
 
-- **Offline (default):** with no Base44 app configured, data lives in
-  `localStorage`. Linked games still sync between tabs of the same browser
-  (BroadcastChannel), which is handy for testing. Archidekt and Scryfall are
+- **No server (default):** with no Base44 app configured, data lives in
+  `localStorage` and linked, Horde and duel games connect phone-to-phone
+  (`src/lib/p2p.js`): the creating phone hosts the game, the free PeerJS
+  broker introduces the browsers, and changes flow directly over WebRTC as
+  per-player patches. The host's phone must keep the game open. Set
+  `VITE_PEER_HOST`/`VITE_PEER_PORT`/`VITE_PEER_PATH`/`VITE_PEER_SECURE` to use
+  your own PeerJS server. Archidekt and Scryfall are
   called directly from the browser.
 - **Online (Base44):** set the variables below and linked, Horde and duel games
   sync between phones in real time. AI card search (by description or photo) is
