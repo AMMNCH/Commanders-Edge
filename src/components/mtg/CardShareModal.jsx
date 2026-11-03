@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Send, X, Search, Loader2, History, Sparkles, BookOpen, Camera } from 'lucide-react';
-import { ai } from '@/api/backend';
+import { ai, isCloud } from '@/api/backend';
 import ArchidektDeckPicker from './ArchidektDeckPicker';
 
 const HISTORY_KEY = 'mtg_card_history';
@@ -394,8 +394,8 @@ Return ONLY the exact card name, nothing else.`,
             </button>}
           </div>
 
-          {/* Archidekt deck picker toggle */}
-          <div className="mb-4">
+          {/* Archidekt deck picker toggle (Archidekt only answers through the server) */}
+          {isCloud && <div className="mb-4">
             <button
               onClick={() => setShowDeckPicker(v => !v)}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
@@ -423,7 +423,7 @@ Return ONLY the exact card name, nothing else.`,
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </div>}
 
           {/* Card preview */}
           <AnimatePresence>

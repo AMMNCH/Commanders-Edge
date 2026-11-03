@@ -294,7 +294,7 @@ export default function Lobby() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold">Play your deck</div>
-                  <div className="text-white/45 text-xs mt-0.5">Load an Archidekt deck: hand, battlefield, graveyard and more</div>
+                  <div className="text-white/45 text-xs mt-0.5">Paste your deck list and play it: hand, battlefield, graveyard and more</div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-white/25" />
               </Link>

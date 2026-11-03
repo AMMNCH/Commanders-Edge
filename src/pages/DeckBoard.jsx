@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { getQuery } from '@/lib/nav';
-import { functions } from '@/api/backend';
+import { functions, isCloud } from '@/api/backend';
 import { extractArchidektId, deckFromText } from '@/lib/archidekt';
 import { createBoard, boardReducer, isLand, ZONE_LABEL } from '@/lib/deckBoard';
 import CardImage from '@/components/mtg/CardImage';
@@ -89,15 +89,18 @@ function DeckLoader({ onLoaded, initialId }) {
   const [input, setInput] = useState(initialId ? `https://archidekt.com/decks/${initialId}` : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState('link'); // 'link' | 'paste'
+  // Without a server, Archidekt blocks link loading, so pasting is the way in.
+  const [tab, setTab] = useState(isCloud && initialId ? 'link' : 'paste'); // 'link' | 'paste'
   const [listText, setListText] = useState('');
   const [listName, setListName] = useState('');
-  const recent = useMemo(() => load(RECENT_KEY, []), []);
+  const recent = useMemo(() => load(RECENT_KEY, []).filter((d) => d.text || isCloud), []);
 
-  const goList = async () => {
+  const goList = async (text = listText, name = listName.trim() || 'Pasted deck') => {
     setBusy(true); setError('');
     try {
-      const { deck, missing: miss } = await deckFromText(listText, { name: listName.trim() || 'Pasted deck' });
+      const { deck, missing: miss } = await deckFromText(text, { name });
+      const key = `paste:${name.toLowerCase()}`;
+      save(RECENT_KEY, [{ key, name, text }, ...load(RECENT_KEY, []).filter((d) => d.key !== key)].slice(0, 8));
       const board = createBoard(deck);
       board.deck.missing = miss; // shown on the board so nothing silently disappears
       onLoaded(board);
@@ -127,7 +130,7 @@ function DeckLoader({ onLoaded, initialId }) {
     }
   };
 
-  useEffect(() => { if (initialId) go(String(initialId)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initialId && isCloud) go(String(initialId)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-[100dvh] bg-arcane text-white">
@@ -138,15 +141,15 @@ function DeckLoader({ onLoaded, initialId }) {
           </Link>
           <div>
             <h1 className="font-display text-2xl tracking-wide">Play your deck</h1>
-            <p className="text-white/45 text-xs">Load an Archidekt deck and play it on your own board.</p>
+            <p className="text-white/45 text-xs">Paste your deck list and play it on your own board.</p>
           </div>
         </div>
-        <div className="flex gap-1 mt-5 p-1 rounded-xl bg-white/5">
+        {isCloud && <div className="flex gap-1 mt-5 p-1 rounded-xl bg-white/5">
           {[['link', 'Deck link'], ['paste', 'Paste deck list']].map(([k, label]) => (
             <button key={k} onClick={() => { setTab(k); setError(''); }}
               className={`flex-1 py-2 rounded-lg text-sm font-bold ${tab === k ? 'bg-white/15 text-white' : 'text-white/45'}`}>{label}</button>
           ))}
-        </div>
+        </div>}
 
         {tab === 'link' ? (
           <div className="card-glass p-4 mt-3 space-y-3">
@@ -166,17 +169,23 @@ function DeckLoader({ onLoaded, initialId }) {
           </div>
         ) : (
           <div className="card-glass p-4 mt-3 space-y-3">
-            <p className="text-white/55 text-xs leading-relaxed">
-              On Archidekt, open your deck, tap <b className="text-white/80">Export</b> (in the deck&apos;s menu) and copy the text. Lists from Moxfield or any other site work too. One card per line, like <span className="text-white/80">1 Sol Ring</span>. Cards marked Commander start in the command zone.
-            </p>
-            <label htmlFor="deck-name" className="label-caps">Deck name</label>
+            <div className="text-white/60 text-xs leading-relaxed space-y-1.5">
+              <p className="text-white/80 font-semibold">Copy your deck from Archidekt:</p>
+              <ol className="list-decimal pl-4 space-y-0.5">
+                <li>Open your deck on archidekt.com.</li>
+                <li>Open the deck&apos;s menu and choose <b className="text-white/85">Export</b>.</li>
+                <li>Tap <b className="text-white/85">Copy</b>, then paste it below.</li>
+              </ol>
+              <p className="text-white/40">Lists from Moxfield or any other site work too: one card per line, like &ldquo;1 Sol Ring&rdquo;. Cards marked Commander start in the command zone. Pictures come from Scryfall.</p>
+            </div>
+            <label htmlFor="deck-name" className="label-caps mt-1 block">Deck name</label>
             <input id="deck-name" value={listName} onChange={(e) => setListName(e.target.value)} placeholder="My deck" className="input-dark text-sm" />
             <label htmlFor="deck-list" className="label-caps">Deck list</label>
             <textarea id="deck-list" value={listText} onChange={(e) => setListText(e.target.value)} rows={9}
               placeholder={'1x Wilhelt, the Rotcleaver [Commander]\n1 Sol Ring\n30 Swamp'}
               className="input-dark text-sm font-mono leading-relaxed" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
             {error && <p className="text-red-300 text-sm">{error}</p>}
-            <button onClick={goList} disabled={busy || !listText.trim()} className="btn-gold w-full flex items-center justify-center gap-2">
+            <button onClick={() => goList()} disabled={busy || !listText.trim()} className="btn-gold w-full flex items-center justify-center gap-2">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {busy ? 'Looking up cards…' : 'Load list'}
             </button>
           </div>
@@ -186,7 +195,7 @@ function DeckLoader({ onLoaded, initialId }) {
             <p className="label-caps mt-6 mb-2">Recent decks</p>
             <div className="space-y-2">
               {recent.map((d) => (
-                <button key={d.id} onClick={() => go(String(d.id))} disabled={busy}
+                <button key={d.key || d.id} onClick={() => (d.text ? goList(d.text, d.name) : go(String(d.id)))} disabled={busy}
                   className="card-glass w-full flex items-center gap-3 p-3 text-left active:bg-white/[0.08]">
                   <Layers className="w-4 h-4 text-gold" />
                   <span className="flex-1 truncate font-semibold text-sm">{d.name}</span>
@@ -197,7 +206,7 @@ function DeckLoader({ onLoaded, initialId }) {
           </>
         )}
         <p className="text-white/35 text-[11px] mt-6 leading-relaxed">
-          Your commander starts in the command zone and you draw seven. Tap a card on the battlefield to tap or untap it; press and hold any card to see it full screen with more actions.
+          Recent decks reload with one tap. Your commander starts in the command zone and you draw seven. Tap a card on the battlefield to tap or untap it; press and hold any card to see it full screen with more actions.
         </p>
       </div>
     </div>
