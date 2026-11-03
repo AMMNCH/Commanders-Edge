@@ -10,7 +10,7 @@ import { createPageUrl } from '@/utils';
 import { getQuery, goTo } from '@/lib/nav';
 import {
   Minus, Plus, BookOpen, Skull, ChevronDown,
-  MessageSquare, LogOut, Link, X, Hand
+  MessageSquare, LogOut, Link, X, Hand, LayoutGrid
 } from 'lucide-react';
 import VoiceChat from '@/components/duel/VoiceChat';
 import DuelChatLog from '@/components/duel/DuelChatLog';
@@ -368,6 +368,7 @@ export default function DuelGame() {
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showChat, setShowChat] = useState(false);
+  const [view, setView] = useState('board'); // 'board' | 'command'
   const [unreadChat, setUnreadChat] = useState(0);
   const [deckLoading, setDeckLoading] = useState(false);
 
@@ -723,8 +724,74 @@ export default function DuelGame() {
         </div>
       )}
 
-      {/* Split table */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+      {/* ── BOARD: full-screen table ─────────────────────────────────────── */}
+      {view === 'board' && (
+        <div className="flex-1 min-h-0 flex flex-col gap-1.5 px-1.5 pt-1.5"
+          style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+          {/* Opponent strip */}
+          <div className="flex-shrink-0 flex items-center gap-2 px-2">
+            <span className="w-2 h-2 rounded-full" style={{ background: ACCENTS[oppIdx] }} />
+            <span className="text-white/80 text-sm font-bold truncate">{oppPlayer?.name || 'Opponent'}</span>
+            <span className="text-white/35 text-xs">Hand {oppPlayer?.hand_count ?? 0} · Library {oppPlayer?.library_count ?? 0}</span>
+            <span className="ml-auto font-display text-xl tabular-nums" style={{ color: ACCENTS[oppIdx] }}>{oppPlayer?.life ?? 20}</span>
+          </div>
+          <div className="flex-[2] min-h-0">
+            <FreeBoard
+              cards={oppPlayer?.battlefield || []}
+              readOnly
+              accent={ACCENTS[oppIdx]}
+              title={`${oppPlayer?.name || 'Opponent'}'s battlefield`}
+              emptyText={oppPlayer ? 'Nothing on their battlefield yet' : 'Waiting for your opponent to join'}
+            />
+          </div>
+          <div className="flex-[3] min-h-0">
+            <FreeBoard
+              cards={myPlayer?.battlefield || []}
+              accent={ACCENTS[myIdx]}
+              title="Your battlefield"
+              emptyText="Tap a card in your hand below to play it here"
+              onTap={handleTap}
+              onCounter={handleCounter}
+              onMove={handleMoveCard}
+              onUntapAll={() => handleTap('ALL')}
+              actions={[
+                { label: '✋ Return to hand', onClick: handleBounce },
+                { label: '⬡ Exile', onClick: handleExileFromField },
+                { label: '🗑 Destroy (graveyard)', danger: true, onClick: handleDestroy },
+              ]}
+            />
+          </div>
+          {/* My hand + life + turn */}
+          <div className="flex-shrink-0 rounded-2xl border border-white/10 bg-black/40">
+            <div className="flex items-center gap-2 px-2 pt-1.5">
+              <span className="text-white/40 text-[11px] font-bold">Hand · {(myPlayer?.hand || []).length}{deckLoading ? ' · loading deck…' : ''}</span>
+              <button onClick={handleDraw} className="px-2.5 py-1 rounded-lg bg-sky-500/20 border border-sky-400/30 text-sky-200 text-[11px] font-bold">Draw</button>
+              <div className="ml-auto flex items-center gap-1">
+                <button onClick={() => handleLifeChange(-1)} aria-label="Lose life" className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Minus className="w-4 h-4 text-white" /></button>
+                <span className="w-10 text-center font-display text-xl tabular-nums text-white">{myPlayerDisplay?.life ?? 20}</span>
+                <button onClick={() => handleLifeChange(1)} aria-label="Gain life" className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Plus className="w-4 h-4 text-white" /></button>
+              </div>
+              <button onClick={handleEndTurn} disabled={!isMyTurn}
+                className="px-3 py-1.5 rounded-lg text-xs font-black disabled:opacity-40"
+                style={isMyTurn ? { background: ACCENTS[myIdx], color: '#000' } : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}>
+                {isMyTurn ? 'End turn →' : 'Their turn'}
+              </button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto px-2 py-2 scrollbar-hide" style={{ minHeight: 92 }}>
+              {(myPlayer?.hand || []).length === 0
+                ? <p className="text-white/20 text-xs self-center mx-auto">Empty hand. Tap Draw.</p>
+                : myPlayer.hand.map(card => (
+                  <HandCard key={card.id} card={card} onPlay={handlePlayFromHand} onDiscard={handleDiscardFromHand} />
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── COMMAND: life, phases, hand, graveyard ───────────────────────── */}
+      {view === 'command' && (
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden"
+        style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
 
         {/* Opponent — top / left, read-only */}
         <div className="flex-1 min-h-0 border-b lg:border-b-0 lg:border-r overflow-hidden"
@@ -769,6 +836,21 @@ export default function DuelGame() {
             onExileFromField={handleExileFromField}
           />
         </div>
+      </div>
+
+      )}
+
+      {/* Bottom tabs (like the Horde screen) */}
+      <div className="fixed bottom-0 inset-x-0 z-30 flex items-center justify-around border-t border-white/10 bg-[#0a0910]/95"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)', paddingTop: 8, minHeight: 56 }}>
+        {[['command', 'Command', Hand], ['board', 'Board', LayoutGrid]].map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setView(id)} className="flex flex-col items-center gap-1 px-8 py-1"
+            style={{ color: view === id ? ACCENTS[myIdx] : 'rgba(255,255,255,0.35)' }}>
+            <Icon className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-wide uppercase">{label}</span>
+            {view === id && <span className="w-5 h-0.5 rounded-full" style={{ background: ACCENTS[myIdx] }} />}
+          </button>
+        ))}
       </div>
 
       {/* Chat drawer */}

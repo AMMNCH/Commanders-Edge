@@ -234,7 +234,7 @@ export default function FreeBoard({
   ];
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-white/10 h-full min-h-[240px]"
+    <div className="relative rounded-2xl overflow-hidden border border-white/10 h-full min-h-[160px]"
       style={{ background: `linear-gradient(180deg, rgba(5,4,8,0.9), ${accent}14)` }}>
       <div className="absolute inset-0 opacity-[0.05] pointer-events-none"
         style={{ backgroundImage: 'repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 1px,transparent 40px),repeating-linear-gradient(90deg,#fff 0,#fff 1px,transparent 1px,transparent 40px)' }} />
