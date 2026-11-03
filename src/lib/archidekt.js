@@ -12,9 +12,16 @@ export function extractArchidektId(input) {
   return m ? m[1] : null;
 }
 
-export function scryfallImageFromUid(uid) {
+export function scryfallImageFromUid(uid, { face = 'front', size = 'normal' } = {}) {
   if (!uid || uid.length < 2) return null;
-  return `https://cards.scryfall.io/normal/front/${uid[0]}/${uid[1]}/${uid}.jpg`;
+  return `https://cards.scryfall.io/${size}/${face}/${uid[0]}/${uid[1]}/${uid}.jpg`;
+}
+
+/** Image by exact name via Scryfall's API (redirects to the picture). */
+export function scryfallImageByName(name, { size = 'normal', face } = {}) {
+  if (!name) return null;
+  const back = face === 'back' ? '&face=back' : '';
+  return `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}&format=image&version=${size}${back}`;
 }
 
 const TOKEN_RE = /(\d+)\/(\d+)[^.,(]*?([A-Z][a-z]+(?: [A-Z][a-z]+)*) (?:creature )?token/g;
@@ -37,6 +44,8 @@ export function parseArchidektDeck(data) {
       power: oracle.power ?? null,
       toughness: oracle.toughness ?? null,
       image_url: scryfallImageFromUid(entry.card?.uid),
+      scryfall_id: entry.card?.uid || null,
+      categories: entry.categories || [],
       is_token: false,
       is_commander: categories.includes('commander'),
       oracle_id: oracle.uid,

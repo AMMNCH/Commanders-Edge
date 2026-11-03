@@ -12,6 +12,7 @@ optional Base44 backend, each player can also track the game on their own phone.
 | **Linked game**: everyone on their own phone, plus a shared scoreboard | `/Lobby` → Create linked game | For syncing between phones |
 | **Horde Commander**: co-op against a self-running horde deck | `/Lobby` → Horde Commander | For syncing between phones |
 | **1v1 remote duel**: Archidekt deck, live board, chat, voice | `/DuelLobby` | Yes |
+| **Play your deck**: load an Archidekt deck and play it solo (hand, battlefield, library, graveyard, exile, command zone) | `/DeckBoard` | No |
 | **Game history and leaderboard** | `/Stats` | No |
 
 ### The table

@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ChevronDown, User, X, Search } from 'lucide-react';
+import { Loader2, ChevronDown, User, X, Search, Play } from 'lucide-react';
+import { parseArchidektDeck } from '@/lib/archidekt';
+import { createPageUrl } from '@/utils';
+import { pageHref } from '@/lib/nav';
+import CardImage from './CardImage';
+import CardZoom from './CardZoom';
 
 const USERNAME_KEY = 'mtg_archidekt_username';
 
@@ -23,6 +28,7 @@ export default function ArchidektDeckPicker({ onDeckLoaded, onCardSelected, acce
   const [error, setError] = useState('');
   const [cardSearch, setCardSearch] = useState('');
   const [showDecks, setShowDecks] = useState(false);
+  const [zoomIndex, setZoomIndex] = useState(null);
 
   // Auto-load decks if username already saved
   useEffect(() => {
@@ -67,16 +73,8 @@ export default function ArchidektDeckPicker({ onDeckLoaded, onCardSelected, acce
       const res = await fetch(`https://archidekt.com/api/decks/${deck.id}/?format=json`);
       if (!res.ok) throw new Error('Could not load deck');
       const data = await res.json();
-      const cards = (data.cards || [])
-        .filter(c => c.card?.oracleCard?.name)
-        .map(c => ({
-          name: c.card.oracleCard.name,
-          image_url: c.card.uid
-            ? `https://storage.googleapis.com/archidekt-card-images/${c.card.edition?.editioncode}/${c.card.scryfallImageHash ? '' : ''}${c.card.uid}_normal.jpg`
-            : null,
-          categories: c.categories || [],
-        }))
-        // deduplicate by name
+      // Same parser as the deck board, so images use Scryfall's real links.
+      const cards = parseArchidektDeck(data).deck.cards
         .filter((c, i, arr) => arr.findIndex(x => x.name === c.name) === i);
       setDeckCards(cards);
       onDeckLoaded?.(cards);
@@ -181,22 +179,39 @@ export default function ArchidektDeckPicker({ onDeckLoaded, onCardSelected, acce
               )}
             </div>
           </div>
-          <div className="max-h-48 overflow-y-auto px-2 pb-2 space-y-0.5">
+          <div className="px-2 pb-1 flex items-center justify-between">
+            <span className="text-white/35 text-[10px]">Tap a card to view it large</span>
+            {selectedDeck && (
+              <a href={pageHref(createPageUrl(`DeckBoard?deck=${selectedDeck.id}`))}
+                className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg"
+                style={{ background: `${accentColor}22`, color: accentColor }}>
+                <Play className="w-3 h-3" /> Play this deck
+              </a>
+            )}
+          </div>
+          <div className="max-h-72 overflow-y-auto px-2 pb-2 grid grid-cols-3 gap-1.5">
             {filteredCards.map((c, i) => (
-              <button
-                key={i}
-                onClick={() => onCardSelected(c.name)}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/70 active:bg-white/15 hover:bg-white/8 transition-all flex items-center gap-2"
-              >
-                <span className="flex-1 truncate">{c.name}</span>
-                {c.categories.length > 0 && (
-                  <span className="text-white/25 text-xs flex-shrink-0 truncate max-w-16">{c.categories[0]}</span>
-                )}
+              <button key={c.name} onClick={() => setZoomIndex(i)}
+                className="text-left rounded-lg overflow-hidden active:scale-95 transition-transform">
+                <CardImage card={c} className="w-full aspect-[63/88] rounded-lg" />
+                <span className="block text-[10px] text-white/60 truncate mt-0.5 px-0.5">{c.name}</span>
               </button>
             ))}
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {zoomIndex !== null && (
+          <CardZoom
+            cards={filteredCards}
+            index={zoomIndex}
+            onClose={() => setZoomIndex(null)}
+            caption={(c) => [c.type, c.categories?.[0]].filter(Boolean).join(' · ')}
+            actions={() => [{ label: 'Show to table', primary: true, onClick: (c) => onCardSelected(c.name) }]}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

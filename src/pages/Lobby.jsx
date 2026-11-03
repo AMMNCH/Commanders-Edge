@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Link2, Skull, Swords, ArrowRight, Copy, Check, Share2, Trophy, ChevronRight,
-  ArrowLeft, Loader2, CloudOff, Cloud, Play, BarChart2,
+  ArrowLeft, Loader2, CloudOff, Cloud, Play, BarChart2, Layers,
 } from 'lucide-react';
 import { db, isCloud } from '@/api/backend';
 import { createPageUrl } from '@/utils';
@@ -287,6 +287,17 @@ export default function Lobby() {
                   )}
                 </div>
               </div>
+
+              <Link to={createPageUrl('DeckBoard')} className="card-glass mt-3 flex items-center gap-3 p-3.5 active:bg-white/[0.08]">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#2dd4bf22', border: '1px solid #2dd4bf44' }}>
+                  <Layers className="w-5 h-5" style={{ color: '#2dd4bf' }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold">Play your deck</div>
+                  <div className="text-white/45 text-xs mt-0.5">Load an Archidekt deck: hand, battlefield, graveyard and more</div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-white/25" />
+              </Link>
 
               <p className="label-caps mt-8 mb-2">Each player on their own phone</p>
               <div className="space-y-2">

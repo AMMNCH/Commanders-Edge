@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import VoiceChat from '@/components/duel/VoiceChat';
 import DuelChatLog from '@/components/duel/DuelChatLog';
+import CardImage from '@/components/mtg/CardImage';
+import CardZoom from '@/components/mtg/CardZoom';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ACCENTS = ['#60a5fa', '#f87171'];
@@ -46,6 +48,7 @@ function shuffle(arr) {
 // ─── BattlefieldCard ──────────────────────────────────────────────────────────
 function BattlefieldCard({ card, onTap, onCounter, onDestroy }) {
   const [menu, setMenu] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
   const holdRef = useRef(null);
   const net = (card.counters?.['+1+1'] || 0) - (card.counters?.['-1-1'] || 0);
 
@@ -59,14 +62,7 @@ function BattlefieldCard({ card, onTap, onCounter, onDestroy }) {
         className="select-none cursor-pointer"
         style={{ transform: `rotate(${card.tapped ? 20 : 0}deg)`, transition: 'transform 0.2s', width: 60, height: 84 }}
       >
-        {card.image_url
-          ? <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded-lg shadow-lg pointer-events-none" draggable={false} />
-          : (
-            <div className="w-full h-full rounded-lg bg-slate-700 border border-white/20 flex items-center justify-center p-1">
-              <span className="text-white/60 text-[8px] text-center leading-tight">{card.name}</span>
-            </div>
-          )
-        }
+        <CardImage card={card} className="w-full h-full object-cover rounded-lg shadow-lg pointer-events-none" />
         {net !== 0 && (
           <div className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border border-black/40 ${net > 0 ? 'bg-green-500' : 'bg-red-500'} text-white`}>
             {net > 0 ? `+${net}` : net}
@@ -88,6 +84,10 @@ function BattlefieldCard({ card, onTap, onCounter, onDestroy }) {
               className="absolute z-50 left-0 top-full mt-1 w-48 rounded-2xl bg-[#100e16] border border-white/20 shadow-2xl p-2 space-y-1"
             >
               <p className="text-white/40 text-[9px] uppercase tracking-widest px-1 pb-1 truncate">{card.name}</p>
+              <button onClick={() => { setZoomed(true); setMenu(false); }}
+                className="w-full text-left px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold">
+                🔍 View full screen
+              </button>
               <button onClick={() => { onTap && onTap(card.id); setMenu(false); }}
                 className="w-full text-left px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold">
                 {card.tapped ? '↺ Untap' : '↷ Tap'}
@@ -108,6 +108,9 @@ function BattlefieldCard({ card, onTap, onCounter, onDestroy }) {
           </>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {zoomed && <CardZoom cards={[card]} onClose={() => setZoomed(false)} />}
+      </AnimatePresence>
     </div>
   );
 }
@@ -116,6 +119,7 @@ function BattlefieldCard({ card, onTap, onCounter, onDestroy }) {
 // Tap to play to battlefield. Hold for a preview/discard option.
 function HandCard({ card, onPlay, onDiscard }) {
   const [preview, setPreview] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
   const holdRef = useRef(null);
 
   return (
@@ -129,14 +133,7 @@ function HandCard({ card, onPlay, onDiscard }) {
         className="relative cursor-pointer select-none"
         style={{ width: 56, height: 78 }}
       >
-        {card.image_url
-          ? <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded-lg shadow-xl border-2 border-white/20 pointer-events-none" draggable={false} />
-          : (
-            <div className="w-full h-full rounded-lg bg-slate-600 border-2 border-white/30 flex items-center justify-center p-1">
-              <span className="text-white/70 text-[8px] text-center leading-tight font-bold">{card.name}</span>
-            </div>
-          )
-        }
+        <CardImage card={card} className="w-full h-full object-cover rounded-lg shadow-xl border-2 border-white/20 pointer-events-none" />
         {/* Play hint overlay */}
         <div className="absolute inset-0 rounded-lg bg-green-500/0 hover:bg-green-500/10 transition-colors" />
       </motion.div>
@@ -150,9 +147,9 @@ function HandCard({ card, onPlay, onDiscard }) {
               initial={{ opacity: 0, scale: 0.9, y: -10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
               className="absolute z-50 bottom-full mb-2 left-0 w-44 rounded-2xl bg-[#100e16] border border-white/20 shadow-2xl p-2 space-y-1"
             >
-              {card.image_url && (
-                <img src={card.image_url} alt={card.name} className="w-full rounded-xl mb-2" draggable={false} />
-              )}
+              <button onClick={() => { setZoomed(true); setPreview(false); }} className="block w-full mb-2" aria-label="View full screen">
+                <CardImage card={card} className="w-full aspect-[63/88] rounded-xl" />
+              </button>
               <p className="text-white/50 text-[9px] uppercase tracking-widest px-1 truncate">{card.name}</p>
               <button onClick={() => { onPlay(card); setPreview(false); }}
                 className="w-full px-3 py-2 rounded-xl bg-green-600/30 border border-green-500/40 text-green-300 text-xs font-bold">
@@ -164,6 +161,15 @@ function HandCard({ card, onPlay, onDiscard }) {
               </button>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {zoomed && (
+          <CardZoom cards={[card]} onClose={() => setZoomed(false)}
+            actions={() => [
+              { label: 'Play to battlefield', primary: true, onClick: () => onPlay(card) },
+              { label: 'Discard', onClick: () => onDiscard(card) },
+            ]} />
         )}
       </AnimatePresence>
     </div>
@@ -195,7 +201,7 @@ function GraveyardDrawer({ cards, isOwner, onReturnToField, onToggleExile }) {
               {cards.length === 0 && <p className="text-white/20 text-xs text-center py-2">Empty</p>}
               {cards.map(card => (
                 <div key={card.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-xl border ${card.exiled ? 'border-orange-700/20 bg-orange-900/10 opacity-60' : 'border-white/10 bg-white/5'}`}>
-                  {card.image_url && <img src={card.image_url} alt={card.name} className="w-6 h-9 object-cover rounded flex-shrink-0" draggable={false} />}
+                  <CardImage card={card} className="w-6 h-9 rounded flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold truncate text-white/70">{card.name}</div>
                     {card.exiled && <div className="text-[9px] text-orange-400/70 font-bold">EXILED</div>}
@@ -480,7 +486,7 @@ export default function DuelGame() {
       const expanded = [];
       raw.forEach(card => {
         for (let q = 0; q < (card.quantity || 1); q++) {
-          expanded.push({ id: uid(), name: card.name, image_url: card.image_url || '' });
+          expanded.push({ id: uid(), name: card.name, image_url: card.image_url || '', scryfall_id: card.scryfall_id || null });
         }
       });
       const shuffled = shuffle(expanded);

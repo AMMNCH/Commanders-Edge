@@ -14,6 +14,7 @@
  *   import Settings from './pages/Settings';
  *   
  *   export const PAGES = {
+    "DeckBoard": DeckBoard,
  *       "HomePage": HomePage,
  *       "Dashboard": Dashboard,
  *       "Settings": Settings,
@@ -31,6 +32,7 @@
  *   import __Layout from './Layout.jsx';
  *
  *   export const PAGES = {
+    "DeckBoard": DeckBoard,
  *       "Home": Home,
  *       "Settings": Settings,
  *   }
@@ -47,6 +49,7 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
+import DeckBoard from './pages/DeckBoard';
 import DuelGame from './pages/DuelGame';
 import DuelLobby from './pages/DuelLobby';
 import HordeCommander from './pages/HordeCommander';
@@ -58,6 +61,7 @@ import Table from './pages/Table';
 
 
 export const PAGES = {
+    "DeckBoard": DeckBoard,
     "DuelGame": DuelGame,
     "DuelLobby": DuelLobby,
     // Old pass-and-play route; kept so bookmarks keep working.
