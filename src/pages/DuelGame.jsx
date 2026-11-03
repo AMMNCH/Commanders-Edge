@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { db, functions } from '@/api/backend';
 import { createPageUrl } from '@/utils';
+import { getQuery, goTo } from '@/lib/nav';
 import {
   Minus, Plus, BookOpen, Skull, RotateCcw, Trash2, ChevronDown,
   MessageSquare, LogOut, Link, X, Hand
@@ -425,7 +426,7 @@ function PlayerHalf({
 
 // ─── Main DuelGame ────────────────────────────────────────────────────────────
 export default function DuelGame() {
-  const params = new URLSearchParams(window.location.search);
+  const params = getQuery();
   const code = params.get('code');
   const myIdx = parseInt(params.get('playerIndex') || '0');
   const oppIdx = 1 - myIdx;
@@ -702,7 +703,7 @@ export default function DuelGame() {
   if (!game) return (
     <div className="fixed inset-0 bg-obsidian flex flex-col items-center justify-center gap-4">
       <div className="text-white/60 font-bold">Game not found</div>
-      <button onClick={() => window.location.href = createPageUrl('DuelLobby')}
+      <button onClick={() => goTo(createPageUrl('DuelLobby'))}
         className="px-4 py-2 rounded-xl bg-amber-500/30 border border-amber-500/50 text-amber-300 font-bold text-sm">
         Back to Lobby
       </button>
@@ -742,7 +743,7 @@ export default function DuelGame() {
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center">{unreadChat}</span>
             )}
           </button>
-          <button onClick={() => window.location.href = createPageUrl('DuelLobby')}
+          <button onClick={() => goTo(createPageUrl('DuelLobby'))}
             className="w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center text-white/30">
             <LogOut className="w-4 h-4" />
           </button>

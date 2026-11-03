@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Swords, Link, ArrowRight, Copy, Check, Shuffle } from 'lucide-react';
 import { db } from '@/api/backend';
 import { createPageUrl } from '@/utils';
+import { goTo } from '@/lib/nav';
 
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -87,7 +88,7 @@ export default function DuelLobby() {
     players[1] = { ...players[1], name: myName || 'Player 2', deck_url: deckUrl, deck_name: deckName || extractDeckName(deckUrl) || 'My Deck' };
     const chatLog = [...(game.chat_log || []), { player_index: -1, player_name: 'System', message: `${players[1].name} joined!`, timestamp: new Date().toISOString(), type: 'system' }];
     await db.DuelGame.update(game.id, { players, status: 'active', chat_log: chatLog });
-    window.location.href = createPageUrl(`DuelGame?code=${game.code}&playerIndex=1`);
+    goTo(createPageUrl(`DuelGame?code=${game.code}&playerIndex=1`));
   };
 
   const enterMatchmaking = async () => {
@@ -100,7 +101,7 @@ export default function DuelLobby() {
       players[1] = { ...players[1], name: myName || 'Player 2', deck_url: deckUrl, deck_name: deckName || extractDeckName(deckUrl) || 'My Deck' };
       const chatLog = [...(game.chat_log || []), { player_index: -1, player_name: 'System', message: `${players[1].name} joined via matchmaking!`, timestamp: new Date().toISOString(), type: 'system' }];
       await db.DuelGame.update(game.id, { players, status: 'active', matchmaking: false, chat_log: chatLog });
-      window.location.href = createPageUrl(`DuelGame?code=${game.code}&playerIndex=1`);
+      goTo(createPageUrl(`DuelGame?code=${game.code}&playerIndex=1`));
       return;
     }
     // Create a waiting game
@@ -121,13 +122,13 @@ export default function DuelLobby() {
     const unsub = db.DuelGame.subscribe((event) => {
       if (event.type === 'update' && event.data?.code === code && event.data?.status === 'active') {
         unsub();
-        window.location.href = createPageUrl(`DuelGame?code=${code}&playerIndex=0`);
+        goTo(createPageUrl(`DuelGame?code=${code}&playerIndex=0`));
       }
     });
   };
 
   const goToGame = () => {
-    window.location.href = createPageUrl(`DuelGame?code=${createdCode}&playerIndex=0`);
+    goTo(createPageUrl(`DuelGame?code=${createdCode}&playerIndex=0`));
   };
 
   const copyLink = () => {
@@ -169,7 +170,7 @@ export default function DuelLobby() {
               <Shuffle className="inline w-5 h-5 mr-2" />
               Find Random Opponent
             </button>
-            <button onClick={() => window.location.href = createPageUrl('Lobby')}
+            <button onClick={() => goTo(createPageUrl('Lobby'))}
               className="w-full text-white/30 text-sm py-2">← Back to Commander Lobby</button>
           </div>
         )}

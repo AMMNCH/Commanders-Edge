@@ -7,10 +7,12 @@ import {
 } from 'lucide-react';
 import { db, isCloud } from '@/api/backend';
 import { createPageUrl } from '@/utils';
+import { getQuery, pageHref } from '@/lib/nav';
 import RecentGames, { saveRecentGame } from '@/components/lobby/RecentGames';
 import HordeDeckSelector from '@/components/horde/HordeDeckSelector';
 import { loadCurrentTable, listGames } from '@/lib/history';
 import { COLOR_KEYS, accentOf } from '@/lib/theme';
+import iconUrl from '@/assets/icon.svg';
 
 function calcHordeSharedLife(playerCount) {
   return Math.max(40, 100 - (playerCount - 1) * 15);
@@ -95,7 +97,7 @@ function BackBar({ onBack, title, sub }) {
 
 export default function Lobby() {
   const navigate = useNavigate();
-  const initialJoin = useMemo(() => new URLSearchParams(window.location.search).get('join') || '', []);
+  const initialJoin = useMemo(() => getQuery().get('join') || '', []);
   const [mode, setMode] = useState(initialJoin ? 'join' : null); // 'create' | 'join' | 'horde'
   const [playerCount, setPlayerCount] = useState(4);
   const [startingLife, setStartingLife] = useState(40);
@@ -152,7 +154,7 @@ export default function Lobby() {
     }
   };
 
-  const shareUrl = created ? `${window.location.origin}${createPageUrl(`Lobby?join=${created.code}`)}` : '';
+  const shareUrl = created ? `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}${pageHref(createPageUrl(`Lobby?join=${created.code}`))}` : '';
 
   const copyCode = async () => {
     try { await navigator.clipboard.writeText(created.code); } catch (_) { /* ignore */ }
@@ -241,7 +243,7 @@ export default function Lobby() {
             <motion.div key="home" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <img src="/icon.svg" alt="" className="w-12 h-12 rounded-2xl shadow-[0_8px_30px_rgba(212,166,74,0.25)] flex-shrink-0" />
+                  <img src={iconUrl} alt="" className="w-12 h-12 rounded-2xl shadow-[0_8px_30px_rgba(212,166,74,0.25)] flex-shrink-0" />
                   <div className="min-w-0">
                     <h1 className="font-display text-2xl leading-none tracking-wide">Commander&apos;s Edge</h1>
                     <p className="text-white/45 text-xs mt-1">Life, damage &amp; turns for your pod</p>

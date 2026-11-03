@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { db, patchDoc } from '@/api/backend';
 import { Minus, Plus, Bell, Leaf, ChevronDown, ArrowRight, MoreHorizontal, Users, Repeat, SkipForward, LogOut, Trophy, SlidersHorizontal, BarChart2, Search, Skull, Swords, Droplet, Pencil } from 'lucide-react';
 import { createPageUrl } from '@/utils';
+import { getQuery, goTo, pageHref } from '@/lib/nav';
 import TurnTimer from '@/components/mtg/TurnTimer';
 import DiceRoller from '@/components/mtg/DiceRoller';
 import { InlineSpinWheel } from '@/components/mtg/LifeWheelPicker';
@@ -30,7 +31,7 @@ const PLAYER_COLORS = {
 const COLORS_LIST = ['purple','blue','red','green','gold','white'];
 
 export default function PlayerView() {
-  const params = new URLSearchParams(window.location.search);
+  const params = getQuery();
   const sessionId = params.get('sessionId');
   const playerIndex = parseInt(params.get('playerIndex') || '0');
   const playerName = (() => {
@@ -365,7 +366,7 @@ export default function PlayerView() {
       <div className="min-h-[100dvh] bg-arcane flex flex-col items-center justify-center gap-4 p-6 text-center">
         {!notFound && <div className="w-8 h-8 border-4 border-white/10 border-t-gold rounded-full animate-spin" />}
         <div className="text-white/50">{notFound ? `Couldn't find game ${joinCode || ''}. It may have been created on another device while offline.` : `Connecting to game${joinCode ? ` ${joinCode}` : ''}…`}</div>
-        <a href={createPageUrl('Lobby')} className="text-xs text-white/35 underline underline-offset-4">Back to home</a>
+        <a href={pageHref(createPageUrl('Lobby'))} className="text-xs text-white/35 underline underline-offset-4">Back to home</a>
       </div>
     );
   }
@@ -406,7 +407,7 @@ export default function PlayerView() {
           <div className="flex items-center gap-2">
             {isHordeMode ? (
               <a
-                href={createPageUrl(`HordeCommander?code=${session.code}`)}
+                href={pageHref(createPageUrl(`HordeCommander?code=${session.code}`))}
                 className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-xl bg-red-900/50 border border-red-600/50 text-red-300 text-xs font-bold active:bg-red-900/70"
               >
                 <Skull className="w-3.5 h-3.5" />
@@ -414,7 +415,7 @@ export default function PlayerView() {
               </a>
             ) : (
               <a
-                href={createPageUrl(`Scoreboard?code=${session.code}`)}
+                href={pageHref(createPageUrl(`Scoreboard?code=${session.code}`))}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 border border-white/15 text-white/50 active:bg-white/20"
@@ -789,7 +790,7 @@ export default function PlayerView() {
 
               <button onClick={() => {
                 // Navigate to Lobby, clearing game session state
-                window.location.href = createPageUrl('Lobby');
+                goTo(createPageUrl('Lobby'));
               }}
                 className="w-full flex items-center gap-3 py-3.5 px-4 rounded-xl bg-red-900/30 border border-red-700/30 active:bg-red-900/50">
                 <LogOut className="w-5 h-5 text-red-400" />
@@ -820,10 +821,7 @@ export default function PlayerView() {
                 {session.players?.map((p, i) => (
                   <button key={i}
                     onClick={() => {
-                      const url = new URL(window.location.href);
-                      url.searchParams.set('playerIndex', i);
-                      url.searchParams.set('playerName', p.name || `Player ${i+1}`);
-                      window.location.href = url.toString();
+                      goTo(createPageUrl(`PlayerView?code=${session.code}&playerIndex=${i}&playerName=${encodeURIComponent(p.name || `Player ${i+1}`)}`));
                     }}
                     className={`flex items-center gap-2 p-3 rounded-xl border text-left ${
                       i === playerIndex ? 'border-white/40 bg-white/15 text-white' : 'border-white/10 bg-white/5 text-white/60'

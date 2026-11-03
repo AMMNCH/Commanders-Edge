@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '@/api/backend';
 import { createPageUrl } from '@/utils';
+import { getQuery, pageHref } from '@/lib/nav';
 import { ArrowLeft, ChevronRight, RotateCcw, Skull, Users, Swords, LayoutGrid } from 'lucide-react';
 import SharedLifeCounter from '@/components/horde/SharedLifeCounter';
 import HordeLibrary from '@/components/horde/HordeLibrary';
@@ -22,7 +23,7 @@ function calcStartingSharedLife(playerCount) {
 }
 
 export default function HordeCommander() {
-  const params = new URLSearchParams(window.location.search);
+  const params = getQuery();
   const code = params.get('code');
 
   const [session, setSession] = useState(null);
@@ -195,7 +196,7 @@ export default function HordeCommander() {
           {/* Header */}
           <div className="px-4 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2">
-              <a href={createPageUrl('Lobby')}
+              <a href={pageHref(createPageUrl('Lobby'))}
                 className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/10 border border-white/15 text-white/50 active:bg-white/20 flex-shrink-0">
                 <ArrowLeft className="w-4 h-4" />
               </a>
@@ -374,7 +375,7 @@ export default function HordeCommander() {
                     <button onClick={resetGame} className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold active:scale-95">
                       Play Again
                     </button>
-                    <a href={createPageUrl('Lobby')} className="flex-1 py-3 rounded-xl bg-white/20 text-white font-bold text-center active:scale-95">
+                    <a href={pageHref(createPageUrl('Lobby'))} className="flex-1 py-3 rounded-xl bg-white/20 text-white font-bold text-center active:scale-95">
                       Lobby
                     </a>
                   </div>

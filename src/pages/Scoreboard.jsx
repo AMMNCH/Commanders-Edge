@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '@/api/backend';
 import { Skull, Crown, Zap, Target, Trophy, Swords, Timer, ArrowLeft } from 'lucide-react';
 import { createPageUrl } from '@/utils';
+import { getQuery, pageHref } from '@/lib/nav';
 import TurnTimer from '@/components/mtg/TurnTimer';
 
 const PLAYER_COLORS = {
@@ -219,7 +220,7 @@ function TurnTimeStats({ session }) {
 
 // ── Main Scoreboard ────────────────────────────────────────────────────────
 export default function Scoreboard() {
-  const params = new URLSearchParams(window.location.search);
+  const params = getQuery();
   const code = params.get('code');
   const [session, setSession] = useState(null);
   const [tab, setTab] = useState('scores'); // 'scores' | 'games'
@@ -265,7 +266,7 @@ export default function Scoreboard() {
       {/* Header */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
-          <a href={createPageUrl('Lobby')}
+          <a href={pageHref(createPageUrl('Lobby'))}
             className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/10 border border-white/15 text-white/50 active:bg-white/20 flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </a>
