@@ -9,13 +9,16 @@ import { db, functions, isCloud } from '@/api/backend';
 import { createPageUrl } from '@/utils';
 import { getQuery, goTo } from '@/lib/nav';
 import {
-  Minus, Plus, BookOpen, Skull, RotateCcw, Trash2, ChevronDown,
+  Minus, Plus, BookOpen, Skull, ChevronDown,
   MessageSquare, LogOut, Link, X, Hand
 } from 'lucide-react';
 import VoiceChat from '@/components/duel/VoiceChat';
 import DuelChatLog from '@/components/duel/DuelChatLog';
 import CardImage from '@/components/mtg/CardImage';
 import CardZoom from '@/components/mtg/CardZoom';
+import FreeBoard from '@/components/board/FreeBoard';
+import { deckFromText } from '@/lib/archidekt';
+import { duelDeckKey } from '@/pages/DuelLobby';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ACCENTS = ['#60a5fa', '#f87171'];
@@ -43,76 +46,6 @@ function shuffle(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-// ─── BattlefieldCard ──────────────────────────────────────────────────────────
-function BattlefieldCard({ card, onTap, onCounter, onDestroy }) {
-  const [menu, setMenu] = useState(false);
-  const [zoomed, setZoomed] = useState(false);
-  const holdRef = useRef(null);
-  const net = (card.counters?.['+1+1'] || 0) - (card.counters?.['-1-1'] || 0);
-
-  return (
-    <div className="relative flex-shrink-0">
-      <div
-        onPointerDown={() => { holdRef.current = setTimeout(() => setMenu(true), 500); }}
-        onPointerUp={() => clearTimeout(holdRef.current)}
-        onPointerLeave={() => clearTimeout(holdRef.current)}
-        onClick={() => !menu && onTap && onTap(card.id)}
-        className="select-none cursor-pointer"
-        style={{ transform: `rotate(${card.tapped ? 20 : 0}deg)`, transition: 'transform 0.2s', width: 60, height: 84 }}
-      >
-        <CardImage card={card} className="w-full h-full object-cover rounded-lg shadow-lg pointer-events-none" />
-        {net !== 0 && (
-          <div className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border border-black/40 ${net > 0 ? 'bg-green-500' : 'bg-red-500'} text-white`}>
-            {net > 0 ? `+${net}` : net}
-          </div>
-        )}
-        {(card.counters?.loyalty > 0) && (
-          <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-purple-500 border border-black/40 flex items-center justify-center text-[9px] font-black text-white">
-            {card.counters.loyalty}
-          </div>
-        )}
-      </div>
-
-      <AnimatePresence>
-        {menu && (
-          <>
-            <div className="fixed inset-0 z-50" onClick={() => setMenu(false)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-              className="absolute z-50 left-0 top-full mt-1 w-48 rounded-2xl bg-[#100e16] border border-white/20 shadow-2xl p-2 space-y-1"
-            >
-              <p className="text-white/40 text-[9px] uppercase tracking-widest px-1 pb-1 truncate">{card.name}</p>
-              <button onClick={() => { setZoomed(true); setMenu(false); }}
-                className="w-full text-left px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold">
-                🔍 View full screen
-              </button>
-              <button onClick={() => { onTap && onTap(card.id); setMenu(false); }}
-                className="w-full text-left px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold">
-                {card.tapped ? '↺ Untap' : '↷ Tap'}
-              </button>
-              {COUNTER_TYPES.map(ct => (
-                <div key={ct.id} className="flex items-center gap-1.5 px-1">
-                  <span className="text-[10px] font-bold w-14 flex-shrink-0" style={{ color: ct.color }}>{ct.label}</span>
-                  <button onClick={() => onCounter && onCounter(card.id, ct.id, -1)} className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/60 text-xs">−</button>
-                  <span className="text-white text-xs font-black w-5 text-center">{card.counters?.[ct.id] || 0}</span>
-                  <button onClick={() => onCounter && onCounter(card.id, ct.id, 1)} className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/60 text-xs">+</button>
-                </div>
-              ))}
-              <button onClick={() => { onDestroy && onDestroy(card); setMenu(false); }}
-                className="w-full text-left px-3 py-1.5 rounded-xl bg-red-900/30 border border-red-700/30 text-red-300 text-xs font-bold flex items-center gap-1.5 mt-1">
-                <Trash2 className="w-3 h-3" /> Destroy
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {zoomed && <CardZoom cards={[card]} onClose={() => setZoomed(false)} />}
-      </AnimatePresence>
-    </div>
-  );
 }
 
 // ─── HandCard ─────────────────────────────────────────────────────────────────
@@ -232,6 +165,7 @@ function PlayerHalf({
   onLifeChange, onTap, onCounter, onDestroy, onDraw, onMill,
   onPlayFromHand, onDiscardFromHand,
   onReturnToField, onToggleExile, onPhaseChange, onEndTurn,
+  onMoveCard, onBounce, onExileFromField,
   deckLoading,
 }) {
   const [lifeDelta, setLifeDelta] = useState(null);
@@ -260,7 +194,6 @@ function PlayerHalf({
   const bf = player.battlefield || [];
   const gy = player.graveyard || [];
   const hand = player.hand || [];
-  const hasTapped = bf.some(c => c.tapped);
 
   return (
     <div className="flex flex-col h-full">
@@ -382,29 +315,24 @@ function PlayerHalf({
       {/* Scrollable content (battlefield + graveyard) */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
 
-        {/* Battlefield */}
-        <div className="flex items-center justify-between">
-          <span className="text-white/30 text-xs font-bold">Battlefield · {bf.length}</span>
-          {isOwner && hasTapped && (
-            <button onClick={() => onTap && onTap('ALL')} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[10px] font-bold active:scale-95">
-              <RotateCcw className="w-2.5 h-2.5" /> Untap All
-            </button>
-          )}
-        </div>
-
-        <div className="min-h-[80px] p-2 rounded-xl bg-black/20 border border-white/8 flex flex-wrap gap-3">
-          {bf.length === 0
-            ? <p className="w-full text-center text-white/10 text-xs self-center">— empty —</p>
-            : bf.map(card => (
-              <BattlefieldCard
-                key={card.id}
-                card={card}
-                onTap={isOwner ? onTap : undefined}
-                onCounter={isOwner ? onCounter : undefined}
-                onDestroy={isOwner ? onDestroy : undefined}
-              />
-            ))
-          }
+        {/* Battlefield: free-form table (drag, pinch, double-tap, hold) */}
+        <div style={{ height: isOwner ? 'max(280px, 40vh)' : 'max(220px, 30vh)' }}>
+          <FreeBoard
+            cards={bf}
+            readOnly={!isOwner}
+            accent={accentColor}
+            title={isOwner ? 'Your battlefield' : `${player.name || 'Opponent'}'s battlefield`}
+            emptyText={isOwner ? 'Tap a card in your hand to play it here' : 'Nothing on their battlefield yet'}
+            onTap={onTap}
+            onCounter={onCounter}
+            onMove={onMoveCard}
+            onUntapAll={() => onTap && onTap('ALL')}
+            actions={isOwner ? [
+              { label: '✋ Return to hand', onClick: (c) => onBounce && onBounce(c) },
+              { label: '⬡ Exile', onClick: (c) => onExileFromField && onExileFromField(c) },
+              { label: '🗑 Destroy (graveyard)', danger: true, onClick: (c) => onDestroy && onDestroy(c) },
+            ] : []}
+          />
         </div>
 
         {/* Graveyard */}
@@ -475,11 +403,16 @@ export default function DuelGame() {
   useEffect(() => {
     if (!game || deckLoadedRef.current) return;
     const deckUrl = game.players?.[myIdx]?.deck_url;
-    if (!deckUrl) return;
+    let pasted = null;
+    try { pasted = localStorage.getItem(duelDeckKey(game.code, myIdx)); } catch (_) { /* ignore */ }
+    if (!deckUrl && !pasted) return;
     deckLoadedRef.current = true;
     setDeckLoading(true);
 
-    functions.invoke('fetchArchidektDeck', { deck_url: deckUrl }).then(res => {
+    const source = pasted
+      ? deckFromText(pasted).then(({ deck }) => ({ data: { deck } }))
+      : functions.invoke('fetchArchidektDeck', { deck_url: deckUrl });
+    source.then(res => {
       // The function returns { deck: { cards } }; drop tokens from the library.
       const raw = (res?.data?.deck?.cards || res?.data?.cards || []).filter(c => !c.is_token);
       // Expand by quantity and shuffle
@@ -502,7 +435,7 @@ export default function DuelGame() {
         const remaining = shuffled.slice(7);
         setDeckCards(remaining);
         const players = prevGame.players.map((p, i) =>
-          i === myIdx ? { ...p, hand, hand_count: hand.length, library_count: (p.library_count ?? 99) - hand.length } : p
+          i === myIdx ? { ...p, hand, hand_count: hand.length, library_count: remaining.length } : p
         );
         const newGame = { ...prevGame, players };
         db.DuelGame.update(gameIdRef.current, newGame);
@@ -596,6 +529,33 @@ export default function DuelGame() {
     const newGy = [...(p.graveyard || []), { id: card.id, name: card.name, image_url: card.image_url }];
     const players = game.players.map((pl, i) => i === myIdx ? { ...pl, battlefield: newBf, graveyard: newGy } : pl);
     save(addLog({ ...game, players }, actMsg(myIdx, p.name, `sent ${card.name} to graveyard`)));
+  };
+
+  // ── Move / bounce / exile from the free-form board ─────────────────────────
+  const handleMoveCard = (cardId, x, y, scale) => {
+    if (!game) return;
+    const newBf = (game.players[myIdx].battlefield || []).map(c => c.id === cardId ? { ...c, x, y, scale } : c);
+    const players = game.players.map((p, i) => i === myIdx ? { ...p, battlefield: newBf } : p);
+    save({ ...game, players });
+  };
+
+  const handleBounce = (card) => {
+    if (!game) return;
+    const p = game.players[myIdx];
+    const newBf = (p.battlefield || []).filter(c => c.id !== card.id);
+    const back = { id: card.id, name: card.name, image_url: card.image_url, scryfall_id: card.scryfall_id || null };
+    const newHand = [...(p.hand || []), back];
+    const players = game.players.map((pl, i) => i === myIdx ? { ...pl, battlefield: newBf, hand: newHand, hand_count: newHand.length } : pl);
+    save(addLog({ ...game, players }, actMsg(myIdx, p.name, `returned ${card.name} to hand`)));
+  };
+
+  const handleExileFromField = (card) => {
+    if (!game) return;
+    const p = game.players[myIdx];
+    const newBf = (p.battlefield || []).filter(c => c.id !== card.id);
+    const newGy = [...(p.graveyard || []), { id: card.id, name: card.name, image_url: card.image_url, scryfall_id: card.scryfall_id || null, exiled: true }];
+    const players = game.players.map((pl, i) => i === myIdx ? { ...pl, battlefield: newBf, graveyard: newGy } : pl);
+    save(addLog({ ...game, players }, actMsg(myIdx, p.name, `exiled ${card.name}`)));
   };
 
   // ── Draw ──────────────────────────────────────────────────────────────────────
@@ -804,6 +764,9 @@ export default function DuelGame() {
             onToggleExile={handleToggleExile}
             onPhaseChange={handlePhaseChange}
             onEndTurn={handleEndTurn}
+            onMoveCard={handleMoveCard}
+            onBounce={handleBounce}
+            onExileFromField={handleExileFromField}
           />
         </div>
       </div>

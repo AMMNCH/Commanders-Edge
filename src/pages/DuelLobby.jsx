@@ -2,6 +2,17 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Swords, Link, ArrowRight, Copy, Check, Shuffle } from 'lucide-react';
 import { db, isCloud } from '@/api/backend';
+
+// Without a server, Archidekt blocks deck links, so players paste their list.
+// Pasted lists stay on this phone (keyed by game + seat), not in the shared game.
+const RECENT_DECKS_KEY = 'ce_deckboard_recent_v1';
+export const duelDeckKey = (code, idx) => `ce_duel_deck_${code}_${idx}`;
+function recentPastedDecks() {
+  try { return (JSON.parse(localStorage.getItem(RECENT_DECKS_KEY) || '[]') || []).filter((d) => d.text); } catch (_) { return []; }
+}
+function saveDuelDeck(code, idx, text) {
+  try { if (text.trim()) localStorage.setItem(duelDeckKey(code, idx), text); } catch (_) { /* ignore */ }
+}
 import { createPageUrl } from '@/utils';
 import { goTo } from '@/lib/nav';
 
@@ -32,6 +43,8 @@ export default function DuelLobby() {
   const [myName, setMyName] = useState('');
   const [deckUrl, setDeckUrl] = useState('');
   const [deckName, setDeckName] = useState('');
+  const [deckText, setDeckText] = useState('');
+  const recentDecks = React.useMemo(recentPastedDecks, []);
   const [joinCode, setJoinCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -72,6 +85,7 @@ export default function DuelLobby() {
       voice_channel_id: channelId,
       chat_log: [{ player_index: -1, player_name: 'System', message: `${player0.name} created the game.`, timestamp: new Date().toISOString(), type: 'system' }],
     });
+    if (!isCloud) saveDuelDeck(code, 0, deckText);
     setCreatedCode(code);
     setLoading(false);
   };
@@ -88,6 +102,7 @@ export default function DuelLobby() {
     players[1] = { ...players[1], name: myName || 'Player 2', deck_url: deckUrl, deck_name: deckName || extractDeckName(deckUrl) || 'My Deck' };
     const chatLog = [...(game.chat_log || []), { player_index: -1, player_name: 'System', message: `${players[1].name} joined!`, timestamp: new Date().toISOString(), type: 'system' }];
     await db.DuelGame.update(game.id, { players, status: 'active', chat_log: chatLog });
+    if (!isCloud) saveDuelDeck(game.code, 1, deckText);
     goTo(createPageUrl(`DuelGame?code=${game.code}&playerIndex=1`));
   };
 
@@ -186,10 +201,34 @@ export default function DuelLobby() {
                   className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500" />
               </div>
               <div>
-                <label className="text-white/60 text-xs uppercase tracking-widest">Archidekt Deck URL</label>
-                <input value={deckUrl} onChange={e => handleDeckUrlChange(e.target.value)} placeholder="https://archidekt.com/decks/..."
-                  className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500 text-sm" />
-                {deckName && <p className="text-amber-400/70 text-xs mt-1 flex items-center gap-1"><Link className="w-3 h-3" />{deckName}</p>}
+                {isCloud ? (
+                  <>
+                    <label className="text-white/60 text-xs uppercase tracking-widest">Archidekt Deck URL</label>
+                    <input value={deckUrl} onChange={e => handleDeckUrlChange(e.target.value)} placeholder="https://archidekt.com/decks/..."
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500 text-sm" />
+                    {deckName && <p className="text-amber-400/70 text-xs mt-1 flex items-center gap-1"><Link className="w-3 h-3" />{deckName}</p>}
+                  </>
+                ) : (
+                  <>
+                    <label className="text-white/60 text-xs uppercase tracking-widest">Your deck list</label>
+                    {recentDecks.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {recentDecks.map(d => (
+                          <button key={d.key} type="button" onClick={() => { setDeckText(d.text); setDeckName(d.name); }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${deckName === d.name && deckText === d.text ? 'bg-amber-500/25 border-amber-400/60 text-amber-200' : 'bg-white/5 border-white/10 text-white/60'}`}>
+                            {d.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <textarea value={deckText} onChange={e => setDeckText(e.target.value)} rows={5}
+                      placeholder={'Paste from Archidekt: deck menu → Export → Copy\n1x Meren of Clan Nel Toth [Commander]\n1 Sol Ring'}
+                      autoCapitalize="off" autoCorrect="off" spellCheck={false}
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/25 focus:outline-none focus:border-amber-500 text-xs font-mono" />
+                    <input value={deckName} onChange={e => setDeckName(e.target.value)} placeholder="Deck name (optional)"
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-2.5 text-white placeholder-white/25 focus:outline-none focus:border-amber-500 text-sm" />
+                  </>
+                )}
               </div>
             </div>
             <button onClick={createGame} disabled={loading}
@@ -259,10 +298,34 @@ export default function DuelLobby() {
                   className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500" />
               </div>
               <div>
-                <label className="text-white/60 text-xs uppercase tracking-widest">Your Archidekt Deck URL</label>
-                <input value={deckUrl} onChange={e => handleDeckUrlChange(e.target.value)} placeholder="https://archidekt.com/decks/..."
-                  className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500 text-sm" />
-                {deckName && <p className="text-amber-400/70 text-xs mt-1 flex items-center gap-1"><Link className="w-3 h-3" />{deckName}</p>}
+                {isCloud ? (
+                  <>
+                    <label className="text-white/60 text-xs uppercase tracking-widest">Your Archidekt Deck URL</label>
+                    <input value={deckUrl} onChange={e => handleDeckUrlChange(e.target.value)} placeholder="https://archidekt.com/decks/..."
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500 text-sm" />
+                    {deckName && <p className="text-amber-400/70 text-xs mt-1 flex items-center gap-1"><Link className="w-3 h-3" />{deckName}</p>}
+                  </>
+                ) : (
+                  <>
+                    <label className="text-white/60 text-xs uppercase tracking-widest">Your deck list</label>
+                    {recentDecks.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {recentDecks.map(d => (
+                          <button key={d.key} type="button" onClick={() => { setDeckText(d.text); setDeckName(d.name); }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${deckName === d.name && deckText === d.text ? 'bg-amber-500/25 border-amber-400/60 text-amber-200' : 'bg-white/5 border-white/10 text-white/60'}`}>
+                            {d.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <textarea value={deckText} onChange={e => setDeckText(e.target.value)} rows={5}
+                      placeholder={'Paste from Archidekt: deck menu → Export → Copy\n1x Meren of Clan Nel Toth [Commander]\n1 Sol Ring'}
+                      autoCapitalize="off" autoCorrect="off" spellCheck={false}
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/25 focus:outline-none focus:border-amber-500 text-xs font-mono" />
+                    <input value={deckName} onChange={e => setDeckName(e.target.value)} placeholder="Deck name (optional)"
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-2.5 text-white placeholder-white/25 focus:outline-none focus:border-amber-500 text-sm" />
+                  </>
+                )}
               </div>
             </div>
             {error && <p className="text-red-400 text-sm text-center">{error}</p>}
@@ -285,10 +348,34 @@ export default function DuelLobby() {
                   className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500" />
               </div>
               <div>
-                <label className="text-white/60 text-xs uppercase tracking-widest">Your Archidekt Deck URL</label>
-                <input value={deckUrl} onChange={e => handleDeckUrlChange(e.target.value)} placeholder="https://archidekt.com/decks/..."
-                  className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500 text-sm" />
-                {deckName && <p className="text-amber-400/70 text-xs mt-1 flex items-center gap-1"><Link className="w-3 h-3" />{deckName}</p>}
+                {isCloud ? (
+                  <>
+                    <label className="text-white/60 text-xs uppercase tracking-widest">Your Archidekt Deck URL</label>
+                    <input value={deckUrl} onChange={e => handleDeckUrlChange(e.target.value)} placeholder="https://archidekt.com/decks/..."
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-amber-500 text-sm" />
+                    {deckName && <p className="text-amber-400/70 text-xs mt-1 flex items-center gap-1"><Link className="w-3 h-3" />{deckName}</p>}
+                  </>
+                ) : (
+                  <>
+                    <label className="text-white/60 text-xs uppercase tracking-widest">Your deck list</label>
+                    {recentDecks.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {recentDecks.map(d => (
+                          <button key={d.key} type="button" onClick={() => { setDeckText(d.text); setDeckName(d.name); }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${deckName === d.name && deckText === d.text ? 'bg-amber-500/25 border-amber-400/60 text-amber-200' : 'bg-white/5 border-white/10 text-white/60'}`}>
+                            {d.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <textarea value={deckText} onChange={e => setDeckText(e.target.value)} rows={5}
+                      placeholder={'Paste from Archidekt: deck menu → Export → Copy\n1x Meren of Clan Nel Toth [Commander]\n1 Sol Ring'}
+                      autoCapitalize="off" autoCorrect="off" spellCheck={false}
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder-white/25 focus:outline-none focus:border-amber-500 text-xs font-mono" />
+                    <input value={deckName} onChange={e => setDeckName(e.target.value)} placeholder="Deck name (optional)"
+                      className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-xl px-4 py-2.5 text-white placeholder-white/25 focus:outline-none focus:border-amber-500 text-sm" />
+                  </>
+                )}
               </div>
             </div>
             <button onClick={enterMatchmaking} disabled={searching}
