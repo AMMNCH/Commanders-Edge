@@ -3,7 +3,10 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
+const BUILD = `${(process.env.GITHUB_SHA || 'dev').slice(0, 7)} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+
 export default defineConfig({
+  define: { __APP_BUILD__: JSON.stringify(BUILD) },
   // Relative asset paths for the single-file / hash-routed build.
   base: process.env.VITE_HASH_ROUTER === '1' ? './' : '/',
   logLevel: 'error', // Suppress warnings, only show errors

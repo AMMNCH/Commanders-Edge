@@ -323,6 +323,7 @@ export default function Lobby() {
               </Link>
 
               <RecentGames onJoin={handleRejoin} />
+              <p className="text-center text-white/20 text-[10px] mt-8">Version {typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 'dev'}</p>
             </motion.div>
           )}
 

@@ -1,6 +1,6 @@
 // Commander's Edge service worker: makes the app open with no connection.
 // Navigations are network-first (so updates land), static assets cache-first.
-const CACHE = 'ce-v2';
+const CACHE = 'ce-v3';
 // Paths are relative to the worker's scope so the app also works under a
 // subpath (e.g. GitHub Pages project sites).
 const SCOPE = new URL('./', self.location).pathname;
@@ -29,7 +29,8 @@ self.addEventListener('fetch', (e) => {
 
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req)
+      // Always ask the network for the newest page (skip the HTTP cache).
+      fetch(req, { cache: 'no-store' })
         .then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(SCOPE, copy)); return res; })
         .catch(() => caches.match(SCOPE))
     );

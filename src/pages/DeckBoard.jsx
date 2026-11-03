@@ -128,6 +128,7 @@ function DeckLoader({ onLoaded, initialId }) {
           <input id="deck-url" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && go(input)}
             placeholder="https://archidekt.com/decks/…" className="input-dark text-sm" inputMode="url" autoComplete="off" />
           {error && <p className="text-red-300 text-sm">{error}</p>}
+          {error && <p className="text-white/25 text-[10px]">Version {typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 'dev'}</p>}
           <button onClick={() => go(input)} disabled={busy} className="btn-gold w-full flex items-center justify-center gap-2">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {busy ? 'Loading deck…' : 'Load deck'}
           </button>
