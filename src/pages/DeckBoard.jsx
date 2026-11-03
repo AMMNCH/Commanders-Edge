@@ -2,12 +2,12 @@
  * DeckBoard — load an Archidekt deck and play it on your own board:
  * hand, battlefield, library, graveyard, exile and command zone.
  */
-import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useReducer, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft, Undo2, MoreHorizontal, Minus, Plus, BookOpen, Skull, Ban, Crown, Loader2,
-  ChevronRight, X, Shuffle, RotateCcw, Layers, Sparkles, Download,
+  ChevronRight, X, Shuffle, RotateCcw, Layers, Sparkles, Download, LayoutGrid,
 } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { getQuery } from '@/lib/nav';
@@ -16,6 +16,7 @@ import { extractArchidektId, deckFromText } from '@/lib/archidekt';
 import { createBoard, boardReducer, isLand, ZONE_LABEL } from '@/lib/deckBoard';
 import CardImage from '@/components/mtg/CardImage';
 import CardZoom from '@/components/mtg/CardZoom';
+import FreeBoard from '@/components/board/FreeBoard';
 import { playSound, initAudio } from '@/components/mtg/SoundEffects';
 
 const SAVE_KEY = 'ce_deckboard_v1';
@@ -23,39 +24,6 @@ const RECENT_KEY = 'ce_deckboard_recent_v1';
 
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch (_) { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* quota */ } };
-
-// ── Long-press helper: tap does one thing, hold does another ────────────────
-function usePress(onTap, onHold, ms = 420) {
-  const t = useRef(null);
-  const held = useRef(false);
-  return {
-    onPointerDown: () => { held.current = false; t.current = setTimeout(() => { held.current = true; onHold(); }, ms); },
-    onPointerUp: () => { clearTimeout(t.current); if (!held.current) onTap(); },
-    onPointerLeave: () => clearTimeout(t.current),
-    onPointerCancel: () => clearTimeout(t.current),
-    onContextMenu: (e) => { e.preventDefault(); },
-  };
-}
-
-function BoardCard({ card, onTap, onHold, w = 62 }) {
-  const press = usePress(onTap, onHold);
-  const h = Math.round(w * 88 / 63);
-  return (
-    <div className="relative flex-shrink-0 select-none" style={{ width: card.tapped ? h : w, height: card.tapped ? w : h, transition: 'width .2s, height .2s' }}>
-      <button {...press} aria-label={`${card.name}${card.tapped ? ' (tapped)' : ''}`}
-        className="absolute left-1/2 top-1/2 touch-manipulation"
-        style={{ width: w, height: h, transform: `translate(-50%,-50%) rotate(${card.tapped ? 90 : 0}deg)`, transition: 'transform .2s' }}>
-        <CardImage card={card} className="w-full h-full rounded-[6px] shadow-lg" />
-        {card.token && <span className="absolute top-0.5 left-0.5 text-[8px] font-black bg-black/70 text-white px-1 rounded">TOKEN</span>}
-      </button>
-      {card.counters !== 0 && (
-        <span className={`absolute -top-1.5 -right-1.5 z-10 min-w-5 h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center border border-black/40 text-white ${card.counters > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}>
-          {card.counters > 0 ? `+${card.counters}` : card.counters}
-        </span>
-      )}
-    </div>
-  );
-}
 
 function Pile({ icon: Icon, label, count, onClick, tone = 'text-white/70' }) {
   return (
@@ -224,6 +192,7 @@ export default function DeckBoard() {
   const [zoom, setZoom] = useState(null); // { zone, index }
   const [sheet, setSheet] = useState(null); // 'library' | 'graveyard' | 'exile' | 'command' | 'menu' | 'tokens'
   const [loading, setLoading] = useState(!state);
+  const [view, setView] = useState('board'); // 'board' | 'command'
 
   useEffect(() => { if (state) save(SAVE_KEY, { ...state, past: (state.past || []).slice(-15) }); }, [state]);
   useEffect(() => {
@@ -254,8 +223,8 @@ export default function DeckBoard() {
     }
     if (zone === 'battlefield') {
       base.push({ label: card.tapped ? 'Untap' : 'Tap', primary: true, onClick: () => act({ type: 'tap', id: card.id }) });
-      base.push({ label: '+1 counter', close: false, onClick: () => act({ type: 'counter', id: card.id, delta: 1 }) });
-      base.push({ label: '−1 counter', close: false, onClick: () => act({ type: 'counter', id: card.id, delta: -1 }) });
+      base.push({ label: '+1/+1 counter', close: false, onClick: () => act({ type: 'counter', id: card.id, counter: '+1+1', delta: 1 }) });
+      base.push({ label: 'Remove +1/+1', close: false, onClick: () => act({ type: 'counter', id: card.id, counter: '+1+1', delta: -1 }) });
       base.push({ label: card.commander ? 'Command zone' : 'Return to hand', onClick: moveTo(card.commander ? 'command' : 'hand') });
       base.push({ label: 'Graveyard', danger: true, onClick: moveTo('graveyard') });
       base.push({ label: 'Exile', onClick: moveTo('exile') });
@@ -326,53 +295,82 @@ export default function DeckBoard() {
         </div>
       )}
 
-      {/* Zones */}
-      <div className="flex-shrink-0 flex gap-1.5 px-3 py-2">
-        <Pile icon={BookOpen} label="Library" count={z.library.length} tone="text-sky-300" onClick={() => setSheet('library')} />
-        <Pile icon={Skull} label="Graveyard" count={z.graveyard.length} onClick={() => setSheet('graveyard')} />
-        <Pile icon={Ban} label="Exile" count={z.exile.length} tone="text-orange-300" onClick={() => setSheet('exile')} />
-      </div>
-
-      {/* Battlefield */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 space-y-3">
-        {z.command.length > 0 && (
-          <div>
-            <p className="label-caps mb-1.5 flex items-center gap-1"><Crown className="w-3 h-3 text-gold" /> Command zone · hold to view</p>
-            <div className="flex gap-2 flex-wrap">
-              {z.command.map((c) => (
-                <BoardCard key={c.id} card={c} w={58} onTap={() => act({ type: 'move', id: c.id, to: 'battlefield' }, 'commander')} onHold={() => openZoom('command', c)} />
-              ))}
-            </div>
+      {/* ── BOARD: full-screen free-form battlefield ─────────────────────── */}
+      {view === 'board' && (
+        <div className="flex-1 min-h-0 flex flex-col gap-1.5 px-1.5 pt-1.5">
+          <div className="flex-1 min-h-0">
+            <FreeBoard
+              cards={z.battlefield}
+              accent="#d4a64a"
+              title="Your battlefield"
+              emptyText="Tap a card in your hand below, then Cast / play"
+              onTap={(id) => act({ type: 'tap', id })}
+              onCounter={(id, counter, delta) => act({ type: 'counter', id, counter, delta })}
+              onMove={(id, x, y, scale) => dispatch({ type: 'place', id, x, y, scale })}
+              onUntapAll={() => act({ type: 'untapAll' })}
+              actions={[
+                { label: '✋ Return to hand', onClick: (c) => act({ type: 'move', id: c.id, to: c.commander ? 'command' : 'hand' }) },
+                { label: '⬆ Top of library', onClick: (c) => act({ type: 'move', id: c.id, to: 'library' }) },
+                { label: '⬡ Exile', onClick: (c) => act({ type: 'move', id: c.id, to: 'exile' }) },
+                { label: '🗑 Graveyard', danger: true, onClick: (c) => act({ type: 'move', id: c.id, to: 'graveyard' }) },
+              ]}
+            />
           </div>
-        )}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="label-caps">Battlefield · {z.battlefield.length}</p>
-            {z.battlefield.some((c) => c.tapped) && (
-              <button onClick={() => act({ type: 'untapAll' })} className="flex items-center gap-1 text-[11px] font-bold text-sky-300"><RotateCcw className="w-3 h-3" /> Untap all</button>
-            )}
-          </div>
-          <div className="min-h-[110px] rounded-2xl border border-white/10 bg-black/20 p-2 flex flex-wrap gap-2 content-start">
-            {others.length === 0 && <p className="w-full text-center text-white/25 text-xs py-8">Play cards from your hand. Tap to tap/untap, hold to view.</p>}
-            {others.map((c) => (
-              <BoardCard key={c.id} card={c} onTap={() => act({ type: 'tap', id: c.id })} onHold={() => openZoom('battlefield', c)} />
+          {/* Zone chips: library / graveyard / exile / commander */}
+          <div className="flex-shrink-0 flex gap-1.5 overflow-x-auto scrollbar-hide">
+            <Pile icon={BookOpen} label="Library" count={z.library.length} tone="text-sky-300" onClick={() => setSheet('library')} />
+            <Pile icon={Skull} label="Graveyard" count={z.graveyard.length} onClick={() => setSheet('graveyard')} />
+            <Pile icon={Ban} label="Exile" count={z.exile.length} tone="text-orange-300" onClick={() => setSheet('exile')} />
+            {z.command.map((c) => (
+              <button key={c.id} onClick={() => openZoom('command', c)}
+                className="flex-shrink-0 flex items-center gap-1.5 rounded-xl bg-gold/15 border border-gold/40 px-2.5 py-2 text-[11px] font-bold text-gold">
+                <Crown className="w-4 h-4" /> <span className="max-w-[9rem] truncate">{c.name}</span>
+              </button>
             ))}
           </div>
         </div>
-        {lands.length > 0 && (
-          <div>
-            <p className="label-caps mb-1.5">Lands · {lands.length} ({lands.filter((c) => !c.tapped).length} untapped)</p>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-2 flex flex-wrap gap-1.5">
-              {lands.map((c) => (
-                <BoardCard key={c.id} card={c} w={48} onTap={() => act({ type: 'tap', id: c.id })} onHold={() => openZoom('battlefield', c)} />
-              ))}
-            </div>
+      )}
+
+      {/* ── COMMAND: zones, command zone and game actions ─────────────────── */}
+      {view === 'command' && (
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            <Pile icon={BookOpen} label="Library" count={z.library.length} tone="text-sky-300" onClick={() => setSheet('library')} />
+            <Pile icon={Skull} label="Graveyard" count={z.graveyard.length} onClick={() => setSheet('graveyard')} />
+            <Pile icon={Ban} label="Exile" count={z.exile.length} tone="text-orange-300" onClick={() => setSheet('exile')} />
           </div>
-        )}
-      </div>
+          <div>
+            <p className="label-caps mb-1.5 flex items-center gap-1"><Crown className="w-3 h-3 text-gold" /> Command zone · tap to view and cast</p>
+            {z.command.length === 0 ? <p className="text-white/30 text-xs">Your commander is on the battlefield or elsewhere.</p> : (
+              <div className="flex gap-2 flex-wrap">
+                {z.command.map((c) => (
+                  <button key={c.id} onClick={() => openZoom('command', c)} className="w-24 text-left">
+                    <CardImage card={c} className="w-full aspect-[63/88] rounded-lg" />
+                    <span className="block text-[10px] text-white/60 truncate mt-0.5">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="label-caps mb-1.5">On the battlefield</p>
+            <p className="text-white/55 text-sm">
+              {z.battlefield.length} permanent{z.battlefield.length === 1 ? '' : 's'} · {lands.length} land{lands.length === 1 ? '' : 's'} ({lands.filter((c) => !c.tapped).length} untapped) · {others.length} other
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="tile" onClick={() => act({ type: 'mulligan' }, 'dice')}><Shuffle className="w-5 h-5 text-violet-300" />Mulligan (new 7)</button>
+            <button className="tile" onClick={() => setSheet('tokens')}><Sparkles className="w-5 h-5 text-emerald-300" />Create token</button>
+            <button className="tile" onClick={() => act({ type: 'untapAll' })}><RotateCcw className="w-5 h-5 text-sky-300" />Untap all</button>
+            <button className="tile" onClick={() => act({ type: 'shuffle' }, 'dice')}><Shuffle className="w-5 h-5 text-sky-300" />Shuffle library</button>
+            <button className="tile" onClick={() => dispatch({ type: 'restart' })}><RotateCcw className="w-5 h-5 text-gold" />Restart game</button>
+            <button className="tile" onClick={() => { save(SAVE_KEY, null); dispatch({ type: 'load', state: null }); setLoading(true); }}><Layers className="w-5 h-5 text-gold" />Load another deck</button>
+          </div>
+        </div>
+      )}
 
       {/* Hand + turn controls */}
-      <div className="flex-shrink-0 border-t border-white/10 bg-[#0b0a10]/95" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+      <div className="flex-shrink-0 mt-1.5 border-t border-white/10 bg-[#0b0a10]/95">
         <div className="flex items-center justify-between px-3 pt-2">
           <p className="label-caps">Hand · {z.hand.length} · tap to view</p>
           <div className="flex gap-1.5">
@@ -382,15 +380,28 @@ export default function DeckBoard() {
               className="px-3 py-1.5 rounded-lg bg-gold text-black text-xs font-bold flex items-center gap-0.5">Next turn <ChevronRight className="w-3.5 h-3.5" /></button>
           </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-hide" style={{ minHeight: 128 }}>
+        <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-hide" style={{ minHeight: 112 }}>
           {z.hand.length === 0 && <p className="text-white/25 text-xs self-center mx-auto">Your hand is empty.</p>}
           {z.hand.map((c) => (
             <button key={c.id} onClick={() => openZoom('hand', c)} aria-label={c.name}
-              className="flex-shrink-0 active:-translate-y-1 transition-transform" style={{ width: 80 }}>
+              className="flex-shrink-0 active:-translate-y-1 transition-transform" style={{ width: 72 }}>
               <CardImage card={c} className="w-full aspect-[63/88] rounded-[6px] shadow-xl border border-white/10" />
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Bottom tabs (like the Horde and duel screens) */}
+      <div className="flex-shrink-0 flex items-center justify-around border-t border-white/10 bg-[#0a0910]"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)', paddingTop: 8, minHeight: 56 }}>
+        {[['command', 'Command', Crown], ['board', 'Board', LayoutGrid]].map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setView(id)} className="flex flex-col items-center gap-1 px-8 py-1"
+            style={{ color: view === id ? '#d4a64a' : 'rgba(255,255,255,0.35)' }}>
+            <Icon className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-wide uppercase">{label}</span>
+            {view === id && <span className="w-5 h-0.5 rounded-full bg-gold" />}
+          </button>
+        ))}
       </div>
 
       {/* Full-screen card view */}

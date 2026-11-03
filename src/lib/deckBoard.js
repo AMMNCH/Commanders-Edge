@@ -25,7 +25,7 @@ function freshCard(c) {
     power: c.power ?? null,
     toughness: c.toughness ?? null,
     tapped: false,
-    counters: 0,
+    counters: {},
     token: Boolean(c.is_token),
     commander: Boolean(c.is_commander),
   };
@@ -77,7 +77,8 @@ function move(state, id, to, { top = true } = {}) {
   const zones = { ...state.zones, [zone]: state.zones[zone].filter((c) => c.id !== id) };
   // Tokens stop existing when they leave the battlefield.
   if (card.token && to !== 'battlefield') return { ...state, zones };
-  const moved = to === 'battlefield' ? card : { ...card, tapped: false, counters: 0 };
+  // Leaving the battlefield clears tap state, counters and board position.
+  const moved = to === 'battlefield' ? card : { ...card, tapped: false, counters: {}, x: undefined, y: undefined, scale: undefined };
   const dest = zones[to] || [];
   // Library: index 0 is the top. Other zones: newest last (graveyard shows newest first in UI).
   zones[to] = to === 'library' ? (top ? [moved, ...dest] : [...dest, moved]) : [...dest, moved];
@@ -109,7 +110,14 @@ function core(state, a) {
     case 'untapAll':
       return { ...state, zones: { ...state.zones, battlefield: state.zones.battlefield.map((c) => ({ ...c, tapped: false })) } };
     case 'counter': {
-      const zones = { ...state.zones, battlefield: state.zones.battlefield.map((c) => (c.id === a.id ? { ...c, counters: c.counters + a.delta } : c)) };
+      // Counters by kind (+1+1, -1-1, damage, loyalty, charge), never below 0.
+      const kind = a.counter || '+1+1';
+      const zones = { ...state.zones, battlefield: state.zones.battlefield.map((c) => {
+        if (c.id !== a.id) return c;
+        const counters = typeof c.counters === 'object' && c.counters ? { ...c.counters } : {};
+        counters[kind] = Math.max(0, (counters[kind] || 0) + a.delta);
+        return { ...c, counters };
+      }) };
       return { ...state, zones };
     }
     case 'shuffle': return { ...state, zones: { ...state.zones, library: shuffle(state.zones.library) } };
@@ -121,6 +129,11 @@ function core(state, a) {
       // Untap, then draw for the turn.
       const untapped = core(state, { type: 'untapAll' });
       return { ...draw(untapped, 1), turn: state.turn + 1, landsThisTurn: 0 };
+    }
+    case 'place': {
+      // Free-form board position; kept out of the undo history.
+      const zones = { ...state.zones, battlefield: state.zones.battlefield.map((c) => (c.id === a.id ? { ...c, x: a.x, y: a.y, scale: a.scale } : c)) };
+      return { ...state, zones };
     }
     case 'life': return { ...state, life: state.life + a.delta };
     case 'token': {
@@ -145,6 +158,7 @@ export function boardReducer(state, action) {
   }
   const next = core(state, action);
   if (next === state) return state;
+  if (action.type === 'place') return next;
   const { past: _p, ...snap } = state;
   const past = [...(state.past || []), snap];
   return { ...next, past: past.length > UNDO_LIMIT ? past.slice(-UNDO_LIMIT) : past };

@@ -56,3 +56,18 @@ describe('deck board', () => {
     expect(s.zones.hand.length + s.zones.library.length).toBe(99);
   });
 });
+
+describe('deck board free-form', () => {
+  it('tracks counters by kind and board positions without cluttering undo', () => {
+    let s = createBoard(deck);
+    const card = s.zones.hand[0];
+    s = run(s, { type: 'move', id: card.id, to: 'battlefield' });
+    const undoDepth = s.past.length;
+    s = run(s, { type: 'place', id: card.id, x: 120, y: 40, scale: 1.4 });
+    expect(s.past.length).toBe(undoDepth);
+    s = run(s, { type: 'counter', id: card.id, counter: '+1+1', delta: 2 }, { type: 'counter', id: card.id, counter: 'damage', delta: 1 });
+    expect(findCard(s, card.id).card).toMatchObject({ x: 120, y: 40, scale: 1.4, counters: { '+1+1': 2, damage: 1 } });
+    s = run(s, { type: 'move', id: card.id, to: 'hand' });
+    expect(findCard(s, card.id).card).toMatchObject({ counters: {}, x: undefined });
+  });
+});
